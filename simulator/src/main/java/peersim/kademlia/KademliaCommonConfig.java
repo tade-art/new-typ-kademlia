@@ -1,7 +1,8 @@
 package peersim.kademlia;
 
 /**
- * Fixed Parameters of a kademlia network. They have a default value and can be configured at
+ * Fixed Parameters of a kademlia network. They have a default value and can be
+ * configured at
  * startup of the network, once only.
  *
  * @author Daniele Furlan, Maurizio Bonani
@@ -11,7 +12,7 @@ public class KademliaCommonConfig {
 
   public static int BITS = 256; // length of Id
 
-  public static int K = 16; // dimension of k-buckets
+  public static int K = 16; // dimension of k-buckets - IPFS normally uses 20
   public static int ALPHA = 3; // number of simultaneous lookup messages
 
   public static int NBUCKETS = 256; // number of buckets in the routing table

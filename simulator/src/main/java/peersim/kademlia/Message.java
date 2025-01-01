@@ -296,6 +296,14 @@ public class Message extends SimpleEvent {
         return "MSG_FIND_REGION_BASED";
       case MSG_FIND_DIST:
         return "MSG_FIND_DIST";
+      case MSG_INIT_PUT:
+        return "MSG_INIT_PUT";
+      case MSG_PUT:
+        return "MSG_PUT";
+      case MSG_INIT_GET:
+        return "MSG_INIT_GET";
+      case MSG_GET:
+        return "MSG_GET";
       // case MSG_TOPIC_QUERY_REPLY:
       // return "MSG_TOPIC_QUERY_REPLY";
       // case MSG_REGISTER_RESPONSE:

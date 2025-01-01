@@ -302,6 +302,7 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    * @param myPid the sender Pid
    */
   private void handlePut(Message m, int myPid) {
+    // System.out.println("In put handler");
     kv.add((BigInteger) m.body, m.value);
   }
 
@@ -319,8 +320,8 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     logger.info("handleFind received from " + m.src.getId() + " " + m.operationId);
     BigInteger[] neighbours;
 
-    System.out.println("\nMessage toString: " + m.toString() + "\n");
-    System.out.println("Node is " + this.node.isEvil());
+    System.out.println("Message toString: " + m.toString());
+    // System.out.println("Node is " + this.node.isEvil());
 
     if (m.getType() == Message.MSG_FIND || m.getType() == Message.MSG_GET) {
       neighbours = this.routingTable.getNeighbours((BigInteger) m.body, m.src.getId());
@@ -332,6 +333,8 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
       logger.warning("Unsupported message type: " + m.getType());
       return;
     }
+
+    // System.out.println("Message Routing Table: " + Arrays.toString(neighbours));
 
     Message response = new Message(Message.MSG_RESPONSE, neighbours);
     response.operationId = m.operationId;

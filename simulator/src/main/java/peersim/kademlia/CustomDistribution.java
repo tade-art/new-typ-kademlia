@@ -35,6 +35,11 @@ public class CustomDistribution implements peersim.core.Control {
    *
    * @return boolean always false
    */
+
+  // find closest peer to attack ID
+  // gen ran number between 0 - 2^256 - it's looking for an existing node
+  //
+
   public boolean execute() {
     // BigInteger tmp;
     for (int i = 0; i < Network.size(); ++i) {
