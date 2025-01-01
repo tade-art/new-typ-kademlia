@@ -14,6 +14,7 @@ import java.util.HashSet;
 // logging
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 import java.util.TreeMap;
 import java.util.logging.ConsoleHandler;
@@ -302,8 +303,72 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    * @param myPid the sender Pid
    */
   private void handlePut(Message m, int myPid) {
-    // System.out.println("In put handler");
-    kv.add((BigInteger) m.body, m.value);
+    BigInteger key = (BigInteger) m.body;
+    System.out.println("Handling PUT for key: " + key + ", from node: " + m.src.getId());
+
+    List<BigInteger> closestPeers = Util.getKClosestPeers(key, routingTable);
+    System.out.println("Closest peers for PUT: " + closestPeers);
+
+    for (BigInteger peerId : closestPeers) {
+      Message putRequest = new Message(Message.MSG_PUT);
+      putRequest.src = this.getNode();
+      putRequest.dst = nodeIdtoNode(peerId).getKademliaProtocol().getNode();
+      putRequest.body = m.body;
+      putRequest.value = m.value;
+
+      System.out.println("Sending PUT request to peer: " + peerId);
+      sendMessage(putRequest, peerId, myPid);
+    }
+
+    // Store locally as well
+    kv.add(key, m.value);
+    System.out.println("Key: " + key + " stored locally with value: " + m.value);
+  }
+
+  /**
+   * Response to a get request.
+   * 
+   * @param m     Message
+   * @param myPid the sender Pid
+   */
+  private void handleGet(Message m, int myPid) {
+    BigInteger key = (BigInteger) m.body;
+    System.out.println("Handling GET for key: " + key + ", requested by node: " + m.src.getId());
+
+    List<BigInteger> closestPeers = Util.getKClosestPeers(key, routingTable);
+    // System.out.println("Closest peers for GET: " + closestPeers);
+
+    Object retrievedValue = null;
+
+    for (BigInteger peerId : closestPeers) {
+      Node peerNode = nodeIdtoNode(peerId);
+      if (peerNode != null) {
+        Message getRequest = new Message(Message.MSG_GET);
+        getRequest.src = this.getNode();
+        getRequest.dst = peerNode.getKademliaProtocol().getNode();
+        getRequest.body = m.body;
+
+        System.out.println("Sending GET request to peer: " + peerId);
+        sendMessage(getRequest, peerId, myPid);
+      } else {
+        System.out.println("Peer node is null for id: " + peerId);
+      }
+    }
+
+    // Retrieve from local store if present
+    retrievedValue = kv.get(key);
+
+    if (retrievedValue != null) {
+      System.out.println("Value retrieved locally for key: " + key + ", value: " + retrievedValue);
+      Message response = new Message(Message.MSG_RESPONSE);
+      response.src = this.getNode();
+      response.dst = m.src;
+      response.body = m.body;
+      response.value = retrievedValue;
+      sendMessage(response, m.src.getId(), myPid);
+    } else {
+      System.out.println("Value not found locally for key: " + key);
+    }
   }
 
   /**
@@ -323,7 +388,7 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     System.out.println("Message toString: " + m.toString());
     // System.out.println("Node is " + this.node.isEvil());
 
-    if (m.getType() == Message.MSG_FIND || m.getType() == Message.MSG_GET) {
+    if (m.getType() == Message.MSG_FIND) {
       neighbours = this.routingTable.getNeighbours((BigInteger) m.body, m.src.getId());
     } else if (m.getType() == Message.MSG_FIND_DIST) {
       neighbours = this.routingTable.getNeighbours((int) m.body);
@@ -504,7 +569,7 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
         break;
       case Message.MSG_GET:
         m = (Message) event;
-        handleFind(m, myPid);
+        handleGet(m, myPid);
         break;
 
       case Message.MSG_PUT:

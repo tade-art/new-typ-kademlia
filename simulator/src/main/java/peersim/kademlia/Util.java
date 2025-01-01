@@ -1,6 +1,8 @@
 package peersim.kademlia;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -139,4 +141,22 @@ public class Util {
   public static BigInteger xorDistance(BigInteger a, BigInteger b) {
     return a.xor(b);
   }
+
+  /**
+   * Given a target key and a RoutingTable, fetch the K closest peers.
+   *
+   * @param targetId     BigInteger representing the target key.
+   * @param routingTable The RoutingTable of the node.
+   * @return List<BigInteger> containing K closest peers.
+   */
+  public static List<BigInteger> getKClosestPeers(BigInteger targetId, RoutingTable routingTable) {
+    BigInteger[] neighbors = routingTable.getNeighbours(targetId, routingTable.getNodeId());
+    List<BigInteger> closestPeers = new ArrayList<>();
+
+    for (int i = 0; i < Math.min(neighbors.length, KademliaCommonConfig.K); i++)
+      closestPeers.add(neighbors[i]);
+
+    return closestPeers;
+  }
+
 }
