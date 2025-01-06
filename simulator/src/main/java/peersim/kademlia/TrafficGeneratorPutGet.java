@@ -12,7 +12,8 @@ import peersim.core.Node;
 import peersim.edsim.EDSimulator;
 
 /**
- * This control generates random search traffic from nodes to random destination node.
+ * This control generates random search traffic from nodes to random destination
+ * node.
  *
  * @author Daniele Furlan, Maurizio Bonani
  * @version 1.0
@@ -29,6 +30,7 @@ public class TrafficGeneratorPutGet implements Control {
   private final int pid;
 
   private boolean first = true;
+
   // ______________________________________________________________________________________________
   public TrafficGeneratorPutGet(String prefix) {
     pid = Configuration.getPid(prefix + "." + PAR_PROT);
@@ -54,6 +56,7 @@ public class TrafficGeneratorPutGet implements Control {
       Message m = Message.makeInitPutValue(id, value);
       m.timestamp = CommonState.getTime();
       System.out.println("Put message " + m.body + " " + m.value);
+      System.out.println("Generated PUT message with type: " + m.getType());
       return m;
     } catch (NoSuchAlgorithmException e) {
       e.printStackTrace();

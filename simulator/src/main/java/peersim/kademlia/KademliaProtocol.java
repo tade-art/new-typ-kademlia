@@ -385,7 +385,7 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     logger.info("handleFind received from " + m.src.getId() + " " + m.operationId);
     BigInteger[] neighbours;
 
-    System.out.println("Message toString: " + m.toString());
+    // System.out.println("Message toString: " + m.toString());
     // System.out.println("Node is " + this.node.isEvil());
 
     if (m.getType() == Message.MSG_FIND) {
@@ -422,6 +422,8 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    * @param myPid the sender Pid
    */
   private void handleInit(Message m, int myPid) {
+
+    System.out.println("Initializing PUT operation for key: " + m.body);
 
     // NEED TO REVIEW THIS
     logger.info("handleInitFind " + (m.body instanceof BigInteger ? (BigInteger) m.body : (int) m.body));
@@ -474,6 +476,8 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
           m.type = Message.MSG_FIND;
         else if (m.type == Message.MSG_INIT_FIND_REGION_BASED) {
           m.type = Message.MSG_FIND_REGION_BASED;
+        } else if (m.type == Message.MSG_INIT_PUT) {
+          m.type = Message.MSG_PUT;
         } else {
           m.type = Message.MSG_FIND_DIST;
           m.body = Util.logDistance(nextNode, (BigInteger) fop.getBody());
@@ -539,6 +543,8 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
       m = (Message) event;
       KademliaObserver.reportMsg(m, false);
     }
+
+    System.out.println("Processing event: " + ((event instanceof Message) ? ((Message) event).getType() : "UNKNOWN"));
 
     switch (((SimpleEvent) event).getType()) {
       case Message.MSG_RESPONSE:
