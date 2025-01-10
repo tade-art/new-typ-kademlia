@@ -194,7 +194,17 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     // get corresponding find operation (using the message field operationId)
     FindOperation fop = this.findOp.get(m.operationId);
 
+    // if (!(m.body instanceof BigInteger[])) {
+    // System.out.println("Error: Expected BigInteger[] but found " +
+    // m.body.getClass());
+    // return;
+    // }
+
     if (fop != null) {
+
+      if (m.body instanceof BigInteger)
+        m.body = new BigInteger[] { (BigInteger) m.body };
+
       fop.elaborateResponse((BigInteger[]) m.body);
 
       logger.info("Handleresponse FindOperation " + fop.getId() + " " + fop.getAvailableRequests());
@@ -307,7 +317,7 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     System.out.println("Handling PUT for key: " + key + ", from node: " + m.src.getId());
 
     List<BigInteger> closestPeers = Util.getKClosestPeers(key, routingTable);
-    System.out.println("Closest peers for PUT: " + closestPeers);
+    // System.out.println("Closest peers for PUT: " + closestPeers);
 
     for (BigInteger peerId : closestPeers) {
       Message putRequest = new Message(Message.MSG_PUT);
@@ -316,6 +326,7 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
       putRequest.body = m.body;
       putRequest.value = m.value;
 
+      // System.out.println("Value inside PUT: " + m.value);
       System.out.println("Sending PUT request to peer: " + peerId);
       sendMessage(putRequest, peerId, myPid);
     }
