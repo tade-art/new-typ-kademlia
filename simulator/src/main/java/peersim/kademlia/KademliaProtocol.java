@@ -193,15 +193,15 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
 
     // get corresponding find operation (using the message field operationId)
     FindOperation fop = this.findOp.get(m.operationId);
+    System.out.println("Operation " + fop);
 
-    // if (!(m.body instanceof BigInteger[])) {
+    // if (!(m.body instanceof BigInteger[])) {a
     // System.out.println("Error: Expected BigInteger[] but found " +
     // m.body.getClass());
     // return;
     // }
 
     if (fop != null) {
-
       if (m.body instanceof BigInteger)
         m.body = new BigInteger[] { (BigInteger) m.body };
 
@@ -313,8 +313,11 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    * @param myPid the sender Pid
    */
   private void handlePut(Message m, int myPid) {
+    // System.out.println("M body for put: " + m.body);
     BigInteger key = (BigInteger) m.body;
-    System.out.println("Handling PUT for key: " + key + ", from node: " + m.src.getId());
+    // System.out.println("key for put: " + key);
+    // System.out.println("Handling PUT for key: " + key + ", from node: " +
+    // m.src.getId());
 
     List<BigInteger> closestPeers = Util.getKClosestPeers(key, routingTable);
     // System.out.println("Closest peers for PUT: " + closestPeers);
@@ -325,15 +328,16 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
       putRequest.dst = nodeIdtoNode(peerId).getKademliaProtocol().getNode();
       putRequest.body = m.body;
       putRequest.value = m.value;
+      putRequest.operationId = m.operationId;
 
       // System.out.println("Value inside PUT: " + m.value);
-      System.out.println("Sending PUT request to peer: " + peerId);
+      // System.out.println("Sending PUT request to peer: " + peerId);
       sendMessage(putRequest, peerId, myPid);
     }
 
     // Store locally as well
     kv.add(key, m.value);
-    System.out.println("Key: " + key + " stored locally with value: " + m.value);
+    // System.out.println("Key: " + key + " stored locally with value: " + m.value);
   }
 
   /**
@@ -344,7 +348,8 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    */
   private void handleGet(Message m, int myPid) {
     BigInteger key = (BigInteger) m.body;
-    System.out.println("Handling GET for key: " + key + ", requested by node: " + m.src.getId());
+    // System.out.println("Handling GET for key: " + key + ", requested by node: " +
+    // m.src.getId());
 
     List<BigInteger> closestPeers = Util.getKClosestPeers(key, routingTable);
     // System.out.println("Closest peers for GET: " + closestPeers);
@@ -358,8 +363,9 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
         getRequest.src = this.getNode();
         getRequest.dst = peerNode.getKademliaProtocol().getNode();
         getRequest.body = m.body;
+        getRequest.operationId = m.operationId;
 
-        System.out.println("Sending GET request to peer: " + peerId);
+        // System.out.println("Sending GET request to peer: " + peerId);
         sendMessage(getRequest, peerId, myPid);
       } else {
         System.out.println("Peer node is null for id: " + peerId);
@@ -370,12 +376,15 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     retrievedValue = kv.get(key);
 
     if (retrievedValue != null) {
-      System.out.println("Value retrieved locally for key: " + key + ", value: " + retrievedValue);
+      // System.out.println("Value retrieved locally for key: " + key + ", value: " +
+      // retrievedValue);
+
       Message response = new Message(Message.MSG_RESPONSE);
       response.src = this.getNode();
       response.dst = m.src;
       response.body = m.body;
       response.value = retrievedValue;
+      response.operationId = m.operationId;
       sendMessage(response, m.src.getId(), myPid);
     } else {
       System.out.println("Value not found locally for key: " + key);
@@ -433,9 +442,6 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    * @param myPid the sender Pid
    */
   private void handleInit(Message m, int myPid) {
-
-    System.out.println("Initializing PUT operation for key: " + m.body);
-
     // NEED TO REVIEW THIS
     logger.info("handleInitFind " + (m.body instanceof BigInteger ? (BigInteger) m.body : (int) m.body));
     KademliaObserver.find_op.add(1);
@@ -555,10 +561,9 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
       KademliaObserver.reportMsg(m, false);
     }
 
-    System.out.println("Processing event: " + ((event instanceof Message) ? ((Message) event).getType() : "UNKNOWN"));
-
     switch (((SimpleEvent) event).getType()) {
       case Message.MSG_RESPONSE:
+        System.out.println("handling a message of type RESPONSE");
         m = (Message) event;
         sentMsg.remove(m.ackId);
         handleResponse(m, myPid);
