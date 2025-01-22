@@ -149,12 +149,14 @@ public class Util {
    * @param routingTable The RoutingTable of the node.
    * @return List<BigInteger> containing K closest peers.
    */
-  public static List<BigInteger> getKClosestPeers(BigInteger targetId, RoutingTable routingTable) {
+  public static BigInteger[] getKClosestPeers(BigInteger targetId, RoutingTable routingTable) {
     BigInteger[] neighbors = routingTable.getNeighbours(targetId, routingTable.getNodeId());
-    List<BigInteger> closestPeers = new ArrayList<>();
+    int k = Math.min(neighbors.length, KademliaCommonConfig.K);
+    BigInteger[] closestPeers = new BigInteger[k];
 
-    for (int i = 0; i < Math.min(neighbors.length, KademliaCommonConfig.K); i++)
-      closestPeers.add(neighbors[i]);
+    for (int i = 0; i < k; i++) {
+      closestPeers[i] = neighbors[i];
+    }
 
     return closestPeers;
   }

@@ -193,17 +193,22 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
 
     // get corresponding find operation (using the message field operationId)
     FindOperation fop = this.findOp.get(m.operationId);
-    System.out.println("Operation " + fop);
 
-    // if (!(m.body instanceof BigInteger[])) {a
-    // System.out.println("Error: Expected BigInteger[] but found " +
-    // m.body.getClass());
-    // return;
-    // }
+    // Operation ID always 0 and findOp is always empty, cannot search for a request
+    // when list is empty resulting in NULL
+    // fop isnt getting incremented per hop, maybe becuase hop isnt ever being
+    // finished / reached?
+
+    if (fop == null) {
+      System.err.println("Error: FindOperation not found for operationId: " + m.operationId);
+      System.out.println("Existing operation IDs: " + findOp.keySet());
+      return;
+    } else {
+      System.out.println("Current OpID: " + m.operationId);
+      System.out.println("Existing operation IDs: " + findOp.keySet());
+    }
 
     if (fop != null) {
-      if (m.body instanceof BigInteger)
-        m.body = new BigInteger[] { (BigInteger) m.body };
 
       fop.elaborateResponse((BigInteger[]) m.body);
 
@@ -226,15 +231,22 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
         ((GetOperation) fop).setValue(m.value);
         logger.warning(
             "Getprocess finished found " + ((GetOperation) fop).getValue() + " hops " + fop.getHops());
+
+        System.out.println("fop available reqs: " + fop.getAvailableRequests() + "| Set to finished");
       }
 
       while (fop.getAvailableRequests() > 0) { // I can send a new find request
 
+        System.out.println("more than 0 available reqs");
         // get an available neighbour
         BigInteger neighbour = fop.getNeighbour();
 
+        System.out.println(neighbour);
+
         if (neighbour != null) {
+          System.out.println("neighbour not null");
           if (!fop.isFinished()) {
+            System.out.println("fop isnt finished");
             // create a new request to send to neighbour
             Message request;
             if (fop instanceof GetOperation)
@@ -255,10 +267,15 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
 
             // send find request
             sendMessage(request, neighbour, myPid);
+          } else {
+            System.out.println("fop finished");
           }
         } else if (fop.getAvailableRequests() == KademliaCommonConfig.ALPHA) { // no new neighbour and no outstanding
                                                                                // requests
           // search operation finished
+
+          System.out.println("fop finished but fop.getAvailableRequests() == KademliaCommonConfig.ALPHA is "
+              + (fop.getAvailableRequests() == KademliaCommonConfig.ALPHA));
 
           if (fop instanceof PutOperation) {
             for (BigInteger id : fop.getNeighboursList()) {
@@ -271,17 +288,20 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
               request.value = ((PutOperation) fop).getValue();
               // increment hop count
               fop.addHops(1);
+              System.out.println("sent PUT msg out");
               sendMessage(request, id, myPid);
             }
             logger.warning("Sending PUT_VALUE to " + fop.getNeighboursList().size() + " nodes");
           } else if (fop instanceof GetOperation) {
             findOp.remove(fop.getId());
+            System.out.println("removed fop bc of getOp");
             logger.warning("Getprocess finished not found ");
 
           } else if (fop instanceof RegionBasedFindOperation) {
             findOp.remove(fop.getId());
             logger.warning("Region-based lookup completed ");
           } else {
+            System.out.println("removed fop in general");
             findOp.remove(fop.getId());
           }
 
@@ -292,11 +312,13 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
             KademliaObserver.timeStore.add(timeInterval);
             KademliaObserver.hopStore.add(fop.getHops());
             KademliaObserver.msg_deliv.add(1);
+            System.out.println("updated statistics");
           }
 
           return;
 
         } else { // no neighbour available but exists oustanding request to wait
+          System.out.println("no neighbour available but exists oustanding request to wait");
           return;
         }
       }
@@ -313,14 +335,8 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    * @param myPid the sender Pid
    */
   private void handlePut(Message m, int myPid) {
-    // System.out.println("M body for put: " + m.body);
     BigInteger key = (BigInteger) m.body;
-    // System.out.println("key for put: " + key);
-    // System.out.println("Handling PUT for key: " + key + ", from node: " +
-    // m.src.getId());
-
-    List<BigInteger> closestPeers = Util.getKClosestPeers(key, routingTable);
-    // System.out.println("Closest peers for PUT: " + closestPeers);
+    BigInteger[] closestPeers = Util.getKClosestPeers(key, routingTable);
 
     for (BigInteger peerId : closestPeers) {
       Message putRequest = new Message(Message.MSG_PUT);
@@ -329,15 +345,12 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
       putRequest.body = m.body;
       putRequest.value = m.value;
       putRequest.operationId = m.operationId;
-
-      // System.out.println("Value inside PUT: " + m.value);
-      // System.out.println("Sending PUT request to peer: " + peerId);
+      putRequest.ackId = m.ackId;
       sendMessage(putRequest, peerId, myPid);
     }
 
     // Store locally as well
     kv.add(key, m.value);
-    // System.out.println("Key: " + key + " stored locally with value: " + m.value);
   }
 
   /**
@@ -348,14 +361,12 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    */
   private void handleGet(Message m, int myPid) {
     BigInteger key = (BigInteger) m.body;
-    // System.out.println("Handling GET for key: " + key + ", requested by node: " +
-    // m.src.getId());
+    BigInteger[] closestPeers = Util.getKClosestPeers(key, routingTable);
+    Object retrievedValue = kv.get(key);
 
-    List<BigInteger> closestPeers = Util.getKClosestPeers(key, routingTable);
-    // System.out.println("Closest peers for GET: " + closestPeers);
-
-    Object retrievedValue = null;
-
+    // ERROR OCCURS HERE
+    // GET REQUEST IS CONSTRCUTED INCORRECTLY, NEEDS TO BE LOOKED AT
+    // IF REQUEST.BODY DOESN't EXIST, YOU GET A DIFFERENT TYPE OF ERROR
     for (BigInteger peerId : closestPeers) {
       Node peerNode = nodeIdtoNode(peerId);
       if (peerNode != null) {
@@ -364,27 +375,20 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
         getRequest.dst = peerNode.getKademliaProtocol().getNode();
         getRequest.body = m.body;
         getRequest.operationId = m.operationId;
-
-        // System.out.println("Sending GET request to peer: " + peerId);
+        getRequest.ackId = m.id;
         sendMessage(getRequest, peerId, myPid);
       } else {
         System.out.println("Peer node is null for id: " + peerId);
       }
     }
 
-    // Retrieve from local store if present
-    retrievedValue = kv.get(key);
-
     if (retrievedValue != null) {
-      // System.out.println("Value retrieved locally for key: " + key + ", value: " +
-      // retrievedValue);
-
-      Message response = new Message(Message.MSG_RESPONSE);
-      response.src = this.getNode();
-      response.dst = m.src;
-      response.body = m.body;
-      response.value = retrievedValue;
+      Message response = new Message(Message.MSG_RESPONSE, closestPeers);
       response.operationId = m.operationId;
+      response.dst = m.dst;
+      response.src = this.getNode();
+      response.value = retrievedValue;
+      response.ackId = m.ackId;
       sendMessage(response, m.src.getId(), myPid);
     } else {
       System.out.println("Value not found locally for key: " + key);
@@ -408,7 +412,7 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     // System.out.println("Message toString: " + m.toString());
     // System.out.println("Node is " + this.node.isEvil());
 
-    if (m.getType() == Message.MSG_FIND) {
+    if (m.getType() == Message.MSG_FIND || m.getType() == Message.MSG_GET) {
       neighbours = this.routingTable.getNeighbours((BigInteger) m.body, m.src.getId());
     } else if (m.getType() == Message.MSG_FIND_DIST) {
       neighbours = this.routingTable.getNeighbours((int) m.body);
@@ -476,6 +480,7 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     BigInteger[] neighbours = this.routingTable.getNeighbours((BigInteger) m.body, this.getNode().getId());
     fop.elaborateResponse(neighbours);
     fop.setAvailableRequests(KademliaCommonConfig.ALPHA);
+
     // set message operation id
     m.operationId = fop.getId();
 
@@ -563,7 +568,6 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
 
     switch (((SimpleEvent) event).getType()) {
       case Message.MSG_RESPONSE:
-        System.out.println("handling a message of type RESPONSE");
         m = (Message) event;
         sentMsg.remove(m.ackId);
         handleResponse(m, myPid);

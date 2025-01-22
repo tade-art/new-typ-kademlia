@@ -56,7 +56,6 @@ public class TrafficGeneratorPutGet implements Control {
       Message m = Message.makeInitPutValue(id, value);
       m.timestamp = CommonState.getTime();
       System.out.println("Put message " + m.body + " " + m.value);
-      System.out.println("Generated PUT message with type: " + m.getType());
       return m;
     } catch (NoSuchAlgorithmException e) {
       e.printStackTrace();
