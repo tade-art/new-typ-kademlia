@@ -9,13 +9,8 @@ package peersim.kademlia;
  */
 import java.math.BigInteger;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
 // logging
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
 import java.util.TreeMap;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
@@ -23,7 +18,6 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
-import jnr.ffi.provider.converters.ByReferenceParameterConverter.Out;
 import peersim.config.Configuration;
 import peersim.core.CommonState;
 import peersim.core.Network;
@@ -37,7 +31,7 @@ import peersim.kademlia.operations.RegionBasedFindOperation;
 import peersim.transport.UnreliableTransport;
 
 // __________________________________________________________________________________________________
-public class KademliaProtocol implements Cloneable, EDProtocol {
+public class KademliaProtocol implements EDProtocol {
 
   // VARIABLE PARAMETERS
   final String PAR_K = "K";
@@ -185,43 +179,53 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    * @param m     Message
    * @param myPid the sender Pid
    */
+
+  /*
+   * BUG ENCOUTNERED
+   * Before function is ran, the RESPONSE message is removed from the sent message
+   * and FOP is removed somewhere - not found that yet since print statements
+   * aren't being ran when config file is ran
+   * 
+   * When a response type message comes into the func, it will locate the correct
+   * fop and then go through the logic to generate GET messages
+   * 
+   * When generating GET messages, the response message comes back into the
+   * function (from handleGet) containing the value from the GET func and gets
+   * flagged as complete since value has been retrieved
+   * 
+   * Because of this, no new messages are created or sent and since findOp list is
+   * empty, the config file just hangs and never finishes - stuck in a loop
+   * 
+   * Potential areas where the bug is being caused - handlePut and handleGet
+   * May be worth looking into handle the "else{}" logic for (if !fop.isFinished)
+   * 
+   * Changed implementation of PUT and GET classes and handleResponse needs to be
+   * refactored to accompany this
+   */
+
   private void handleResponse(Message m, int myPid) {
     // add message source to my routing table
-    if (m.src != null) {
+    if (m.src != null)
       routingTable.addNeighbour(m.src.getId());
-    }
 
     // get corresponding find operation (using the message field operationId)
     FindOperation fop = this.findOp.get(m.operationId);
 
-    // Operation ID always 0 and findOp is always empty, cannot search for a request
-    // when list is empty resulting in NULL
-    // fop isnt getting incremented per hop, maybe becuase hop isnt ever being
-    // finished / reached?
-
-    if (fop == null) {
-      System.err.println("Error: FindOperation not found for operationId: " + m.operationId);
-      System.out.println("Existing operation IDs: " + findOp.keySet());
-      return;
-    } else {
-      System.out.println("Current OpID: " + m.operationId);
-      System.out.println("Existing operation IDs: " + findOp.keySet());
-    }
+    // Debugging print statements
+    System.out.println("Existing operation IDs: " + findOp.keySet());
+    System.out.println("Current FOP being handled at top of func: " + fop.getClass().getSimpleName());
 
     if (fop != null) {
-
       fop.elaborateResponse((BigInteger[]) m.body);
-
       logger.info("Handleresponse FindOperation " + fop.getId() + " " + fop.getAvailableRequests());
-      // save received neighbour in the closest Set of fin operation
 
+      // save received neighbour in the closest Set of fin operation
       BigInteger[] neighbours = (BigInteger[]) m.body;
       for (BigInteger neighbour : neighbours)
         routingTable.addNeighbour(neighbour);
 
       if (!fop.isFinished() && Arrays.asList(neighbours).contains(fop.getDestNode())) {
         logger.warning("Found node " + fop.getDestNode());
-
         KademliaObserver.find_ok.add(1);
         fop.setFinished(true);
       }
@@ -229,27 +233,20 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
       if (fop instanceof GetOperation && m.value != null) {
         fop.setFinished(true);
         ((GetOperation) fop).setValue(m.value);
-        logger.warning(
-            "Getprocess finished found " + ((GetOperation) fop).getValue() + " hops " + fop.getHops());
-
-        System.out.println("fop available reqs: " + fop.getAvailableRequests() + "| Set to finished");
+        logger.warning("Getprocess finished found " + ((GetOperation) fop).getValue() + " hops " + fop.getHops());
       }
 
       while (fop.getAvailableRequests() > 0) { // I can send a new find request
-
-        System.out.println("more than 0 available reqs");
         // get an available neighbour
         BigInteger neighbour = fop.getNeighbour();
 
-        System.out.println(neighbour);
-
         if (neighbour != null) {
-          System.out.println("neighbour not null");
           if (!fop.isFinished()) {
-            System.out.println("fop isnt finished");
             // create a new request to send to neighbour
+            System.out.println("FOP isnt finished");
+            System.out.println("Curr FOP class: " + fop.getClass().getSimpleName());
             Message request;
-            if (fop instanceof GetOperation)
+            if (fop instanceof GetOperation || fop instanceof PutOperation)
               request = new Message(Message.MSG_GET);
             else if (KademliaCommonConfig.FINDMODE == 0)
               request = new Message(Message.MSG_FIND);
@@ -265,19 +262,19 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
             // increment hop count
             fop.addHops(1);
 
+            System.out.println("Type: " + request.typeToString());
+
             // send find request
             sendMessage(request, neighbour, myPid);
-          } else {
-            System.out.println("fop finished");
           }
         } else if (fop.getAvailableRequests() == KademliaCommonConfig.ALPHA) { // no new neighbour and no outstanding
-                                                                               // requests
-          // search operation finished
+                                                                               // requests - search operation finished
 
           System.out.println("fop finished but fop.getAvailableRequests() == KademliaCommonConfig.ALPHA is "
               + (fop.getAvailableRequests() == KademliaCommonConfig.ALPHA));
 
           if (fop instanceof PutOperation) {
+            System.out.println("Creating a put request");
             for (BigInteger id : fop.getNeighboursList()) {
               // create a put request
               Message request = new Message(Message.MSG_PUT);
@@ -288,21 +285,26 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
               request.value = ((PutOperation) fop).getValue();
               // increment hop count
               fop.addHops(1);
-              System.out.println("sent PUT msg out");
               sendMessage(request, id, myPid);
             }
             logger.warning("Sending PUT_VALUE to " + fop.getNeighboursList().size() + " nodes");
-          } else if (fop instanceof GetOperation) {
-            findOp.remove(fop.getId());
-            System.out.println("removed fop bc of getOp");
-            logger.warning("Getprocess finished not found ");
+          }
 
-          } else if (fop instanceof RegionBasedFindOperation) {
+          else if (fop instanceof GetOperation) {
             findOp.remove(fop.getId());
+            System.out.println("Removed getOp from findOp");
+            logger.warning("Getprocess finished not found ");
+          }
+
+          else if (fop instanceof RegionBasedFindOperation) {
+            findOp.remove(fop.getId());
+            System.out.println("Removed RBFO from findOp");
             logger.warning("Region-based lookup completed ");
-          } else {
-            System.out.println("removed fop in general");
+          }
+
+          else {
             findOp.remove(fop.getId());
+            System.out.println("Removed " + fop.getClass() + " from findOp");
           }
 
           if (fop.getBody().equals("Automatically Generated Traffic")
@@ -338,6 +340,10 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     BigInteger key = (BigInteger) m.body;
     BigInteger[] closestPeers = Util.getKClosestPeers(key, routingTable);
 
+    /*
+     * After finding k clostest peers, loop through ALL neighbouring nodes and send
+     * a PUT msg with the message value
+     */
     for (BigInteger peerId : closestPeers) {
       Message putRequest = new Message(Message.MSG_PUT);
       putRequest.src = this.getNode();
@@ -349,7 +355,7 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
       sendMessage(putRequest, peerId, myPid);
     }
 
-    // Store locally as well
+    // Store value locally as well
     kv.add(key, m.value);
   }
 
@@ -364,9 +370,7 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     BigInteger[] closestPeers = Util.getKClosestPeers(key, routingTable);
     Object retrievedValue = kv.get(key);
 
-    // ERROR OCCURS HERE
-    // GET REQUEST IS CONSTRCUTED INCORRECTLY, NEEDS TO BE LOOKED AT
-    // IF REQUEST.BODY DOESN't EXIST, YOU GET A DIFFERENT TYPE OF ERROR
+    // Get k clostest peers for node and send a GET msg to each node
     for (BigInteger peerId : closestPeers) {
       Node peerNode = nodeIdtoNode(peerId);
       if (peerNode != null) {
@@ -382,13 +386,20 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
       }
     }
 
+    /*
+     * If a value has been retreived, then send a RESPONSE msg with the retrieved
+     * value.
+     * 
+     * This is IS NECESSARY, CANNOT REMOVE IT SINCE PREVIOUS IMPLEMETATIONS NEEDED A
+     * RESPONSE MSG, see handleFind for prev code
+     */
     if (retrievedValue != null) {
       Message response = new Message(Message.MSG_RESPONSE, closestPeers);
       response.operationId = m.operationId;
       response.dst = m.dst;
       response.src = this.getNode();
       response.value = retrievedValue;
-      response.ackId = m.ackId;
+      response.ackId = m.id;
       sendMessage(response, m.src.getId(), myPid);
     } else {
       System.out.println("Value not found locally for key: " + key);
