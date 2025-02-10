@@ -194,20 +194,6 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     // get corresponding find operation (using the message field operationId)
     FindOperation fop = this.findOp.get(m.operationId);
 
-    // Operation ID always 0 and findOp is always empty, cannot search for a request
-    // when list is empty resulting in NULL
-    // fop isnt getting incremented per hop, maybe becuase hop isnt ever being
-    // finished / reached?
-
-    if (fop == null) {
-      System.err.println("Error: FindOperation not found for operationId: " + m.operationId);
-      System.out.println("Existing operation IDs: " + findOp.keySet());
-      return;
-    } else {
-      System.out.println("Current OpID: " + m.operationId);
-      System.out.println("Existing operation IDs: " + findOp.keySet());
-    }
-
     if (fop != null) {
 
       fop.elaborateResponse((BigInteger[]) m.body);
@@ -229,25 +215,59 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
       if (fop instanceof GetOperation && m.value != null) {
         fop.setFinished(true);
         ((GetOperation) fop).setValue(m.value);
+        System.out.println("Got value : " + m.value);
         logger.warning(
             "Getprocess finished found " + ((GetOperation) fop).getValue() + " hops " + fop.getHops());
+      }
 
-        System.out.println("fop available reqs: " + fop.getAvailableRequests() + "| Set to finished");
+      if (fop instanceof PutOperation) {
+        for (BigInteger id : fop.getNeighboursList()) {
+          Message putRequest = new Message(Message.MSG_PUT);
+          putRequest.src = this.getNode();
+          putRequest.dst = nodeIdtoNode(id).getKademliaProtocol().getNode();
+          putRequest.body = fop.getDestNode();
+          putRequest.value = ((PutOperation) fop).getValue();
+          putRequest.operationId = fop.getId();
+
+          sendMessage(putRequest, id, myPid);
+        }
+        logger.warning("PUT operation completed on " + fop.getNeighboursList().size() + " nodes");
+
+        kv.add(fop.getDestNode(), ((PutOperation) fop).getValue());
+        return;
+      }
+
+      if (fop instanceof GetOperation) {
+        if (m.value != null) {
+          Message response = new Message(Message.MSG_RESPONSE);
+          response.operationId = fop.getId();
+          response.dst = m.src;
+          response.src = this.getNode();
+          response.value = m.value;
+          response.ackId = m.ackId;
+
+          sendMessage(response, m.src.getId(), myPid);
+          return;
+        }
+
+        for (BigInteger id : fop.getNeighboursList()) {
+          Message getRequest = new Message(Message.MSG_GET);
+          getRequest.src = this.getNode();
+          getRequest.dst = nodeIdtoNode(id).getKademliaProtocol().getNode();
+          getRequest.body = fop.getDestNode();
+          getRequest.operationId = fop.getId();
+
+          sendMessage(getRequest, id, myPid);
+        }
+        return;
       }
 
       while (fop.getAvailableRequests() > 0) { // I can send a new find request
 
-        System.out.println("more than 0 available reqs");
         // get an available neighbour
         BigInteger neighbour = fop.getNeighbour();
-
-        System.out.println(neighbour);
-
         if (neighbour != null) {
-          System.out.println("neighbour not null");
           if (!fop.isFinished()) {
-            System.out.println("fop isnt finished");
-            // create a new request to send to neighbour
             Message request;
             if (fop instanceof GetOperation)
               request = new Message(Message.MSG_GET);
@@ -267,8 +287,6 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
 
             // send find request
             sendMessage(request, neighbour, myPid);
-          } else {
-            System.out.println("fop finished");
           }
         } else if (fop.getAvailableRequests() == KademliaCommonConfig.ALPHA) { // no new neighbour and no outstanding
                                                                                // requests
@@ -336,21 +354,27 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    */
   private void handlePut(Message m, int myPid) {
     BigInteger key = (BigInteger) m.body;
-    BigInteger[] closestPeers = Util.getKClosestPeers(key, routingTable);
 
-    for (BigInteger peerId : closestPeers) {
-      Message putRequest = new Message(Message.MSG_PUT);
-      putRequest.src = this.getNode();
-      putRequest.dst = nodeIdtoNode(peerId).getKademliaProtocol().getNode();
-      putRequest.body = m.body;
-      putRequest.value = m.value;
-      putRequest.operationId = m.operationId;
-      putRequest.ackId = m.ackId;
-      sendMessage(putRequest, peerId, myPid);
+    PutOperation putOp = new PutOperation(this.node.getId(), key, CommonState.getTime());
+    putOp.setValue(m.value);
+    putOp.setBody(key);
+    putOp.setAvailableRequests(KademliaCommonConfig.ALPHA);
+    putOp.setFinished(false);
+
+    findOp.put(putOp.getId(), putOp);
+
+    for (int i = 0; i < KademliaCommonConfig.ALPHA; i++) {
+      BigInteger nextNode = putOp.getNeighbour();
+      if (nextNode != null) {
+        Message findRequest = new Message(Message.MSG_FIND);
+        findRequest.src = this.getNode();
+        findRequest.body = key;
+        findRequest.operationId = putOp.getId();
+        findRequest.dst = nodeIdtoNode(nextNode).getKademliaProtocol().getNode();
+
+        sendMessage(findRequest, nextNode, myPid);
+      }
     }
-
-    // Store locally as well
-    kv.add(key, m.value);
   }
 
   /**
@@ -361,37 +385,41 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    */
   private void handleGet(Message m, int myPid) {
     BigInteger key = (BigInteger) m.body;
-    BigInteger[] closestPeers = Util.getKClosestPeers(key, routingTable);
-    Object retrievedValue = kv.get(key);
 
-    // ERROR OCCURS HERE
-    // GET REQUEST IS CONSTRCUTED INCORRECTLY, NEEDS TO BE LOOKED AT
-    // IF REQUEST.BODY DOESN't EXIST, YOU GET A DIFFERENT TYPE OF ERROR
-    for (BigInteger peerId : closestPeers) {
-      Node peerNode = nodeIdtoNode(peerId);
-      if (peerNode != null) {
-        Message getRequest = new Message(Message.MSG_GET);
-        getRequest.src = this.getNode();
-        getRequest.dst = peerNode.getKademliaProtocol().getNode();
-        getRequest.body = m.body;
-        getRequest.operationId = m.operationId;
-        getRequest.ackId = m.id;
-        sendMessage(getRequest, peerId, myPid);
-      } else {
-        System.out.println("Peer node is null for id: " + peerId);
-      }
-    }
+    Object retrievedValue = kv.get(key);
+    // System.out.println("Retrieving key: " + key);
+    // System.out.println("Retrieved value from kv: " + retrievedValue);
 
     if (retrievedValue != null) {
-      Message response = new Message(Message.MSG_RESPONSE, closestPeers);
+      Message response = new Message(Message.MSG_RESPONSE);
       response.operationId = m.operationId;
-      response.dst = m.dst;
+      response.dst = m.src;
       response.src = this.getNode();
       response.value = retrievedValue;
       response.ackId = m.ackId;
+
       sendMessage(response, m.src.getId(), myPid);
-    } else {
-      System.out.println("Value not found locally for key: " + key);
+      return;
+    }
+
+    GetOperation getOp = new GetOperation(this.node.getId(), key, CommonState.getTime());
+    getOp.setBody(key);
+    getOp.setAvailableRequests(KademliaCommonConfig.ALPHA);
+    getOp.setFinished(false);
+
+    findOp.put(getOp.getId(), getOp);
+
+    for (int i = 0; i < KademliaCommonConfig.ALPHA; i++) {
+      BigInteger nextNode = getOp.getNeighbour();
+      if (nextNode != null) {
+        Message findRequest = new Message(Message.MSG_FIND);
+        findRequest.src = this.getNode();
+        findRequest.body = key;
+        findRequest.operationId = getOp.getId();
+        findRequest.dst = nodeIdtoNode(nextNode).getKademliaProtocol().getNode();
+
+        sendMessage(findRequest, nextNode, myPid);
+      }
     }
   }
 
@@ -473,14 +501,12 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
         break;
     }
 
-    fop.setBody(m.body);
-    findOp.put(fop.getId(), fop);
-
     // get the ALPHA closest node to srcNode and add to find operation
     BigInteger[] neighbours = this.routingTable.getNeighbours((BigInteger) m.body, this.getNode().getId());
     fop.elaborateResponse(neighbours);
     fop.setAvailableRequests(KademliaCommonConfig.ALPHA);
-
+    fop.setBody(m.body);
+    findOp.put(fop.getId(), fop);
     // set message operation id
     m.operationId = fop.getId();
 
