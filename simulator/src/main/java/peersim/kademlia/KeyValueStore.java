@@ -2,6 +2,7 @@ package peersim.kademlia;
 
 import java.math.BigInteger;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -34,7 +35,8 @@ class TimeoutMemoryStore extends TimerTask {
 }
 
 /**
- * The memory store will keep data inside the class, for a specific amout of time
+ * The memory store will keep data inside the class, for a specific amout of
+ * time
  *
  * @author Deisss (LGPLv3)
  * @version 0.1
@@ -46,6 +48,7 @@ public class KeyValueStore {
   public KeyValueStore() {
     mem = new HashMap<>();
   }
+
   /**
    * Add an object into the memory store
    *
@@ -55,10 +58,11 @@ public class KeyValueStore {
   public void add(BigInteger id, Object obj) {
     add(id, obj, 0);
   }
+
   /**
    * Add an object into the memory store
    *
-   * @param obj The object to store
+   * @param obj     The object to store
    * @param timeout The delay in ms
    * @return The key store
    */
@@ -94,7 +98,8 @@ public class KeyValueStore {
    * Delete an entry from the memory store
    *
    * @param key The key to delete
-   * @return The delete value result (true if the object has been found, false in other case)
+   * @return The delete value result (true if the object has been found, false in
+   *         other case)
    */
   public boolean delete(BigInteger key) {
     if (mem.containsKey(key)) {
@@ -107,5 +112,14 @@ public class KeyValueStore {
   /** Empty the memory store */
   public void erase() {
     mem = new HashMap<BigInteger, Object>();
+  }
+
+  /**
+   * Get the set of keys in the memory store
+   *
+   * @return The set of keys
+   */
+  public Set<BigInteger> getKeySet() {
+    return mem.keySet();
   }
 }

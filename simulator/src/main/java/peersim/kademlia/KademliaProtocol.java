@@ -215,26 +215,9 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
       if (fop instanceof GetOperation && m.value != null) {
         fop.setFinished(true);
         ((GetOperation) fop).setValue(m.value);
-        System.out.println("Got value : " + m.value);
+        // System.out.println("Got value : " + m.value);
         logger.warning(
             "Getprocess finished found " + ((GetOperation) fop).getValue() + " hops " + fop.getHops());
-      }
-
-      if (fop instanceof PutOperation) {
-        for (BigInteger id : fop.getNeighboursList()) {
-          Message putRequest = new Message(Message.MSG_PUT);
-          putRequest.src = this.getNode();
-          putRequest.dst = nodeIdtoNode(id).getKademliaProtocol().getNode();
-          putRequest.body = fop.getDestNode();
-          putRequest.value = ((PutOperation) fop).getValue();
-          putRequest.operationId = fop.getId();
-
-          sendMessage(putRequest, id, myPid);
-        }
-        logger.warning("PUT operation completed on " + fop.getNeighboursList().size() + " nodes");
-
-        kv.add(fop.getDestNode(), ((PutOperation) fop).getValue());
-        return;
       }
 
       if (fop instanceof GetOperation) {
@@ -243,6 +226,7 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
           response.operationId = fop.getId();
           response.dst = m.src;
           response.src = this.getNode();
+          // response.body = new BigInteger[] { (BigInteger) m.body };
           response.value = m.value;
           response.ackId = m.ackId;
 
@@ -354,6 +338,8 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    */
   private void handlePut(Message m, int myPid) {
     BigInteger key = (BigInteger) m.body;
+    kv.add(key, m.value);
+    System.out.println("saved to kv with val: " + m.value);
 
     PutOperation putOp = new PutOperation(this.node.getId(), key, CommonState.getTime());
     putOp.setValue(m.value);
@@ -363,17 +349,28 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
 
     findOp.put(putOp.getId(), putOp);
 
-    for (int i = 0; i < KademliaCommonConfig.ALPHA; i++) {
-      BigInteger nextNode = putOp.getNeighbour();
-      if (nextNode != null) {
-        Message findRequest = new Message(Message.MSG_FIND);
-        findRequest.src = this.getNode();
-        findRequest.body = key;
-        findRequest.operationId = putOp.getId();
-        findRequest.dst = nodeIdtoNode(nextNode).getKademliaProtocol().getNode();
+    // for (int i = 0; i < KademliaCommonConfig.ALPHA; i++) {
+    // BigInteger nextNode = putOp.getNeighbour();
+    // if (nextNode != null) {
+    // Message findRequest = new Message(Message.MSG_FIND);
+    // findRequest.src = this.getNode();
+    // findRequest.body = key;
+    // findRequest.operationId = putOp.getId();
+    // findRequest.dst = nodeIdtoNode(nextNode).getKademliaProtocol().getNode();
 
-        sendMessage(findRequest, nextNode, myPid);
-      }
+    // sendMessage(findRequest, nextNode, myPid);
+    // }
+    // }
+
+    for (BigInteger id : putOp.getNeighboursList()) {
+      Message putRequest = new Message(Message.MSG_PUT);
+      putRequest.src = this.getNode();
+      putRequest.dst = nodeIdtoNode(id).getKademliaProtocol().getNode();
+      putRequest.body = key;
+      putRequest.value = putOp.getValue();
+      putRequest.operationId = putOp.getId();
+
+      sendMessage(putRequest, id, myPid);
     }
   }
 
@@ -389,12 +386,14 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     Object retrievedValue = kv.get(key);
     // System.out.println("Retrieving key: " + key);
     // System.out.println("Retrieved value from kv: " + retrievedValue);
+    // System.out.println(m.toString());
 
     if (retrievedValue != null) {
       Message response = new Message(Message.MSG_RESPONSE);
       response.operationId = m.operationId;
       response.dst = m.src;
       response.src = this.getNode();
+      response.body = new BigInteger[] { key };
       response.value = retrievedValue;
       response.ackId = m.ackId;
 

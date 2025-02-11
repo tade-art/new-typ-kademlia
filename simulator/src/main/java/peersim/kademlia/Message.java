@@ -252,7 +252,7 @@ public class Message extends SimpleEvent {
   // ______________________________________________________________________________________________
   public String toString() {
     String s = "[ID=" + id + "][DEST=" + dst + "][OPERATION=" + operationId + "]";
-    return s + "[Type=" + typeToString() + "] BODY=(...)";
+    return s + "[Type=" + typeToString() + "] [BODY=" + body + "]";
   }
 
   // ______________________________________________________________________________________________
