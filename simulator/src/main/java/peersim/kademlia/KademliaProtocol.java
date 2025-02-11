@@ -9,13 +9,8 @@ package peersim.kademlia;
  */
 import java.math.BigInteger;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
 // logging
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
 import java.util.TreeMap;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
@@ -23,7 +18,6 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
-import jnr.ffi.provider.converters.ByReferenceParameterConverter.Out;
 import peersim.config.Configuration;
 import peersim.core.CommonState;
 import peersim.core.Network;
@@ -37,7 +31,7 @@ import peersim.kademlia.operations.RegionBasedFindOperation;
 import peersim.transport.UnreliableTransport;
 
 // __________________________________________________________________________________________________
-public class KademliaProtocol implements Cloneable, EDProtocol {
+public class KademliaProtocol implements EDProtocol {
 
   // VARIABLE PARAMETERS
   final String PAR_K = "K";
@@ -166,10 +160,13 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
     BigInteger mId;
     for (int i = Network.size() - 1; i >= 0; i--) {
       mId = ((KademliaProtocol) Network.get(i).getProtocol(kademliaid)).getNode().getId();
+      // System.out.println("mID: " + mId + "| Search Node: " + searchNodeId);
       if (mId.equals(searchNodeId))
         return Network.get(i);
     }
 
+    System.err.println(
+        "Error: Node with ID " + searchNodeId + " not found in network! Current network size: " + Network.size());
     return null;
   }
 
@@ -220,13 +217,15 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
             "Getprocess finished found " + ((GetOperation) fop).getValue() + " hops " + fop.getHops());
       }
 
-      if (fop instanceof GetOperation) {
+      if (fop instanceof GetOperation && m.value == null) {
         if (m.value != null) {
           Message response = new Message(Message.MSG_RESPONSE);
           response.operationId = fop.getId();
           response.dst = m.src;
           response.src = this.getNode();
           // response.body = new BigInteger[] { (BigInteger) m.body };
+          // response.body = (BigInteger) m.body;
+          response.body = m.body;
           response.value = m.value;
           response.ackId = m.ackId;
 
@@ -349,18 +348,18 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
 
     findOp.put(putOp.getId(), putOp);
 
-    // for (int i = 0; i < KademliaCommonConfig.ALPHA; i++) {
-    // BigInteger nextNode = putOp.getNeighbour();
-    // if (nextNode != null) {
-    // Message findRequest = new Message(Message.MSG_FIND);
-    // findRequest.src = this.getNode();
-    // findRequest.body = key;
-    // findRequest.operationId = putOp.getId();
-    // findRequest.dst = nodeIdtoNode(nextNode).getKademliaProtocol().getNode();
+    for (int i = 0; i < KademliaCommonConfig.ALPHA; i++) {
+      BigInteger nextNode = putOp.getNeighbour();
+      if (nextNode != null) {
+        Message findRequest = new Message(Message.MSG_FIND);
+        findRequest.src = this.getNode();
+        findRequest.body = key;
+        findRequest.operationId = putOp.getId();
+        findRequest.dst = nodeIdtoNode(nextNode).getKademliaProtocol().getNode();
 
-    // sendMessage(findRequest, nextNode, myPid);
-    // }
-    // }
+        sendMessage(findRequest, nextNode, myPid);
+      }
+    }
 
     for (BigInteger id : putOp.getNeighboursList()) {
       Message putRequest = new Message(Message.MSG_PUT);
@@ -382,11 +381,7 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
    */
   private void handleGet(Message m, int myPid) {
     BigInteger key = (BigInteger) m.body;
-
     Object retrievedValue = kv.get(key);
-    // System.out.println("Retrieving key: " + key);
-    // System.out.println("Retrieved value from kv: " + retrievedValue);
-    // System.out.println(m.toString());
 
     if (retrievedValue != null) {
       Message response = new Message(Message.MSG_RESPONSE);
@@ -600,6 +595,8 @@ public class KademliaProtocol implements Cloneable, EDProtocol {
 
       case Message.MSG_INIT_FIND:
       case Message.MSG_INIT_GET:
+        // m = (Message) event;
+        // handleInit(m, myPid);
       case Message.MSG_INIT_PUT:
         m = (Message) event;
         handleInit(m, myPid);
