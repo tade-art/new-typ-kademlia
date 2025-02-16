@@ -45,17 +45,14 @@ public class CustomDistribution implements peersim.core.Control {
     for (int i = 0; i < Network.size(); ++i) {
       Node generalNode = Network.get(i);
       BigInteger id;
-      BigInteger attackerID = null;
+      // BigInteger attackerID = null;
       KademliaNode node;
       // String ip_address;
       id = urg.generate();
       // node = new KademliaNode(id, randomIpAddress(r), 0);
 
       // Skewed randomization: 70% honest, 30% malicious
-      if (Math.random() < 0.7)
-        node = new KademliaNode(id, "0.0.0.0", 0);
-      else
-        node = new KademliaNode(id, attackerID, "0.0.0.0", 0);
+      node = new KademliaNode(id, "0.0.0.0", 0);
 
       KademliaProtocol kadProt = ((KademliaProtocol) (Network.get(i).getProtocol(protocolID)));
 

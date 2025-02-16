@@ -1,6 +1,7 @@
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/vector/Normalizer.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/util/IncrementalFreq.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/graph/ConstUndirGraph.java
+/mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/kademlia/TrafficGeneratorRBFO.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/config/Operators.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/edsim/RegRandNextCycle.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/cdsim/CDSimulator.java
@@ -35,6 +36,7 @@
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/graph/GraphAlgorithms.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/dynamics/WireRegRootedTree.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/kademlia/Message.java
+/mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/kademlia/TrafficGeneratorSybil.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/vector/VectAngle.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/kademlia/KBucket.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/core/Scheduler.java
@@ -58,6 +60,7 @@
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/cdsim/CDProtocol.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/cdsim/DaemonProtocol.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/edsim/PriorityQ.java
+/mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/kademlia/MaliciousCustomDistribution.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/util/MomentStats.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/config/ClassFinder.java
 /mnt/e/Java/p2p/new-typ-kademlia/kademlia-simulator/simulator/src/main/java/peersim/core/Node.java

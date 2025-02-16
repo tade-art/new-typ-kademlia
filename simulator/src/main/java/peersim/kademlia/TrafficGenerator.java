@@ -24,7 +24,7 @@ public class TrafficGenerator implements Control {
   private static final String PAR_PROT = "protocol";
 
   /** MSPastry Protocol ID to act */
-  private final int pid;
+  protected final int pid;
 
   private boolean first = true;
 

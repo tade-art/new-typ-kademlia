@@ -1,3 +1,4 @@
+peersim/kademlia/TrafficGeneratorRBFO.class
 peersim/transport/UniformRandomTransport.class
 peersim/vector/GetterSetterFinder.class
 peersim/vector/VectCopy.class
@@ -12,6 +13,7 @@ peersim/dynamics/WireScaleFreeBA.class
 peersim/cdsim/Shuffle.class
 peersim/kademlia/KademliaNode.class
 peersim/vector/ValueDumper.class
+peersim/kademlia/MaliciousCustomDistribution.class
 peersim/reports/ConnectivityObserver.class
 peersim/core/Linkable.class
 peersim/kademlia/KademliaProtocol$1.class
@@ -90,6 +92,7 @@ peersim/cdsim/FullNextCycle.class
 peersim/kademlia/StateBuilder$1.class
 peersim/core/GeneralNode.class
 peersim/vector/SingleValueHolder.class
+peersim/kademlia/TrafficGeneratorSybil.class
 peersim/edsim/PriorityQ$Event.class
 peersim/kademlia/Turbulence$1.class
 peersim/util/MedianStats.class

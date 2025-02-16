@@ -336,6 +336,10 @@ public class KademliaProtocol implements EDProtocol {
    * @param myPid the sender Pid
    */
   private void handlePut(Message m, int myPid) {
+    if (this.node.isEvil()) {
+      System.out.println("Malicious node " + this.node.getId() + " ignored PUT request.");
+      return; // Ignore the request
+    }
     BigInteger key = (BigInteger) m.body;
     kv.add(key, m.value);
     System.out.println("saved to kv with val: " + m.value);
@@ -380,6 +384,10 @@ public class KademliaProtocol implements EDProtocol {
    * @param myPid the sender Pid
    */
   private void handleGet(Message m, int myPid) {
+    if (this.node.isEvil()) {
+      System.out.println("Malicious node " + this.node.getId() + " ignored GET request.");
+      return; // Ignore the request
+    }
     BigInteger key = (BigInteger) m.body;
     Object retrievedValue = kv.get(key);
 
@@ -427,6 +435,10 @@ public class KademliaProtocol implements EDProtocol {
    */
 
   private void handleFind(Message m, int myPid) {
+    if (this.node.isEvil()) {
+      System.out.println("Malicious node " + this.node.getId() + " ignored FIND request.");
+      return; // Ignore the request
+    }
 
     logger.info("handleFind received from " + m.src.getId() + " " + m.operationId);
     BigInteger[] neighbours;

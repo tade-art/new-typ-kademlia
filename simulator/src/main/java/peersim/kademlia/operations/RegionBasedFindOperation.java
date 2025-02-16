@@ -8,41 +8,36 @@ import peersim.kademlia.Util;
 
 public class RegionBasedFindOperation extends FindOperation {
 
-    // minimum common prefix length
     public int minCPL;
-    // Closest peers that are within the target region
     protected HashMap<BigInteger, Boolean> regionalSet;
-    // Store the original destNode
     public BigInteger targetNode;
 
     /**
-     * defaul constructor
+     * Default constructor
      *
-     * @param destNode Id of the node to find
-     * @param k        Number of honest nodes
+     * @param srcNode   Id of the source node
+     * @param destNode  Id of the node to find
+     * @param k         Number of honest nodes
+     * @param timestamp Timestamp of the operation
      */
     public RegionBasedFindOperation(BigInteger srcNode, BigInteger destNode, int k, long timestamp) {
         super(srcNode, destNode, timestamp);
         this.minCPL = (int) Math.ceil(Math.log(Network.size() / (double) k) / Math.log(2)) - 1;
-        regionalSet = new HashMap<BigInteger, Boolean>();
+        this.regionalSet = new HashMap<>();
         this.targetNode = destNode;
     }
 
     /**
-     * update closestSet with the new information received
+     * Update closestSet with the new information received
      *
-     * @param neighbours
+     * @param neighbours Array of neighbour node IDs
      */
     @Override
     public void elaborateResponse(BigInteger[] neighbours) {
-
-        // add to closestSet
-        for (BigInteger n : neighbours) {
-
-            if (n != null && !regionalSet.containsKey(n)) {
-
-                if (Util.prefixLen(n, this.targetNode) >= this.minCPL) {
-                    this.regionalSet.put(n, false);
+        for (BigInteger neighbour : neighbours) {
+            if (neighbour != null && !regionalSet.containsKey(neighbour)) {
+                if (Util.prefixLen(neighbour, this.targetNode) >= this.minCPL) {
+                    this.regionalSet.put(neighbour, false);
                 }
             }
         }
@@ -50,55 +45,68 @@ public class RegionBasedFindOperation extends FindOperation {
     }
 
     /**
-     * get the first neighbour in closest set which has not been already queried
+     * Get the first neighbour in closest set which has not been already queried
      *
-     * @return the Id of the node or null if there aren't available node
+     * @return the Id of the node or null if there aren't available nodes
      */
+    @Override
     public BigInteger getNeighbour() {
-        // find closest neighbour ( the first not already queried)
         BigInteger neighbour = super.getNeighbour();
-        int curr_minCPL = 0;
         if (neighbour == null && available_requests == KademliaCommonConfig.ALPHA) {
-            // should we let the find operation terminate?
-            curr_minCPL = Util.getMinCplWithSet(this.targetNode, this.closestSet.keySet());
-            // we found all closest peers with common prefix length >= curr_minCPL
-            if (curr_minCPL <= this.minCPL) {
+            int currMinCPL = Util.getMinCplWithSet(this.targetNode, this.closestSet.keySet());
+            if (currMinCPL <= this.minCPL) {
                 return null;
             } else {
-                // Update the destNode
-                this.destNode = Util.flipBit(this.targetNode, curr_minCPL);
-                // Form a new closestSet using regionalSet
-                this.closestSet = new HashMap<BigInteger, Boolean>();
-                for (BigInteger n : regionalSet.keySet()) {
-                    if (closestSet.size() < KademliaCommonConfig.K) { // add directly
-                        closestSet.put(n, false);
-                    } else {
-                        BigInteger newdist = Util.xorDistance(n, destNode);
-                        // find the node with max distance
-                        BigInteger maxdist = newdist;
-                        BigInteger nodemaxdist = n;
-                        for (BigInteger i : closestSet.keySet()) {
-                            BigInteger dist = Util.xorDistance(i, destNode);
-                            if (dist.compareTo(maxdist) > 0) {
-                                maxdist = dist;
-                                nodemaxdist = i;
-                            }
-                        }
-
-                        if (nodemaxdist.compareTo(n) != 0) {
-                            closestSet.remove(nodemaxdist);
-                            closestSet.put(n, false);
-                        }
-                    }
-                }
+                updateDestinationNode(currMinCPL);
             }
         }
 
         if (neighbour != null && regionalSet.containsKey(neighbour)) {
-            regionalSet.remove(neighbour);
             regionalSet.put(neighbour, true);
         }
 
         return neighbour;
+    }
+
+    /**
+     * Update the destination node based on the current minimum common prefix length
+     * (CPL).
+     *
+     * @param currMinCPL The current minimum CPL.
+     */
+    private void updateDestinationNode(int currMinCPL) {
+        this.destNode = Util.flipBit(this.targetNode, currMinCPL);
+        this.closestSet.clear();
+        for (BigInteger node : regionalSet.keySet()) {
+            if (closestSet.size() < KademliaCommonConfig.K) {
+                closestSet.put(node, false);
+            } else {
+                replaceFurthestNode(node);
+            }
+        }
+    }
+
+    /**
+     * Replace the furthest node in the closest set with a new node if the new node
+     * is closer.
+     *
+     * @param node The new node to potentially add to the closest set.
+     */
+    private void replaceFurthestNode(BigInteger node) {
+        BigInteger newDist = Util.xorDistance(node, destNode);
+        BigInteger maxDist = newDist;
+        BigInteger nodeMaxDist = node;
+        for (BigInteger existingNode : closestSet.keySet()) {
+            BigInteger dist = Util.xorDistance(existingNode, destNode);
+            if (dist.compareTo(maxDist) > 0) {
+                maxDist = dist;
+                nodeMaxDist = existingNode;
+            }
+        }
+
+        if (!nodeMaxDist.equals(node)) {
+            closestSet.remove(nodeMaxDist);
+            closestSet.put(node, false);
+        }
     }
 }
