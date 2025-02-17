@@ -8,9 +8,15 @@ package peersim.kademlia;
  * @version 1.0
  */
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 // logging
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
@@ -64,6 +70,10 @@ public class KademliaProtocol implements EDProtocol {
   protected Logger logger;
 
   private KeyValueStore kv;
+
+  private Set<BigInteger> detectedSybils = new HashSet<>();
+  private Map<BigInteger, Integer> nodeAppearanceCount = new HashMap<>();
+  private static final double DETECTION_THRESHOLD = 0.94;
 
   /**
    * Replicate this object by returning an identical copy.<br>
@@ -518,6 +528,8 @@ public class KademliaProtocol implements EDProtocol {
 
     m.src = this.getNode();
 
+    detectSybilAttack((BigInteger) m.body);
+
     // send ALPHA messages
     for (int i = 0; i < KademliaCommonConfig.ALPHA; i++) {
       BigInteger nextNode = fop.getNeighbour();
@@ -708,4 +720,102 @@ public class KademliaProtocol implements EDProtocol {
         });
     logger.addHandler(handler);
   }
+
+  // _________
+  // Detection
+  // _________
+
+  /**
+   * Detects potential Sybil attacks based on the distribution of peer IDs.
+   *
+   * @param targetCID The content identifier (CID) being queried.
+   */
+  public void detectSybilAttack(BigInteger targetCID) {
+    // Step 1: Retrieve the 20 closest peers to the target CID
+    List<BigInteger> closestPeers = getClosestPeers(targetCID, KademliaCommonConfig.K);
+    if (closestPeers.size() < KademliaCommonConfig.K) {
+      System.out.println("Insufficient peers for analysis.");
+      return;
+    }
+
+    // Step 2: Calculate the observed distribution (q)
+    Map<Integer, Integer> cplCount = new HashMap<>();
+    for (BigInteger peerId : closestPeers) {
+      int cpl = Util.prefixLen(targetCID, peerId);
+      cplCount.put(cpl, cplCount.getOrDefault(cpl, 0) + 1);
+    }
+
+    // Normalize to get the observed distribution q
+    Map<Integer, Double> q = new HashMap<>();
+    for (Map.Entry<Integer, Integer> entry : cplCount.entrySet()) {
+      q.put(entry.getKey(), entry.getValue() / (double) KademliaCommonConfig.K);
+    }
+
+    // Step 3: Estimate the network size (N)
+    int networkSize = Network.size();
+
+    // Step 4: Compute the expected distribution (p)
+    Map<Integer, Double> p = computeExpectedDistribution(networkSize);
+
+    // Step 5: Calculate KL Divergence
+    double klDivergence = computeKLDivergence(p, q);
+
+    // Step 6: Detection decision
+    if (klDivergence > DETECTION_THRESHOLD) {
+      System.out.println("Potential Sybil attack detected! KL Divergence: " + klDivergence);
+    } else {
+      System.out.println("No Sybil attack detected. KL Divergence: " + klDivergence);
+    }
+  }
+
+  /**
+   * Retrieves the closest peers to the target CID.
+   *
+   * @param targetCID The content identifier.
+   * @param numPeers  The number of closest peers to retrieve.
+   * @return A list of peer IDs.
+   */
+  private List<BigInteger> getClosestPeers(BigInteger targetCID, int numPeers) {
+    // Utilize the routing table to find the closest peers
+    BigInteger[] neighbors = this.routingTable.getNeighbours(targetCID, this.node.getId());
+    List<BigInteger> closestPeers = new ArrayList<>();
+    for (int i = 0; i < Math.min(numPeers, neighbors.length); i++) {
+      closestPeers.add(neighbors[i]);
+    }
+    return closestPeers;
+  }
+
+  /**
+   * Computes the expected distribution of Common Prefix Lengths (CPLs).
+   *
+   * @param networkSize The estimated size of the network.
+   * @return A map of CPL to its expected probability.
+   */
+  private Map<Integer, Double> computeExpectedDistribution(int networkSize) {
+    Map<Integer, Double> p = new HashMap<>();
+    int m = (int) (Math.log(networkSize) / Math.log(2)); // Assuming m-bit identifiers
+    for (int i = 0; i <= m; i++) {
+      p.put(i, Math.pow(2, -i));
+    }
+    return p;
+  }
+
+  /**
+   * Computes the Kullback-Leibler (KL) Divergence between two distributions.
+   *
+   * @param p The expected distribution.
+   * @param q The observed distribution.
+   * @return The KL Divergence value.
+   */
+  private double computeKLDivergence(Map<Integer, Double> p, Map<Integer, Double> q) {
+    double klDiv = 0.0;
+    for (Map.Entry<Integer, Double> entry : p.entrySet()) {
+      int cpl = entry.getKey();
+      double pValue = entry.getValue();
+      double qValue = q.getOrDefault(cpl, 1e-10); // Avoid log(0) by using a small value
+      klDiv += pValue * Math.log(pValue / qValue);
+    }
+    return klDiv;
+  }
+
 }

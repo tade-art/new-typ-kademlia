@@ -9,7 +9,7 @@ import peersim.kademlia.Util;
 public class RegionBasedFindOperation extends FindOperation {
 
     public int minCPL;
-    protected HashMap<BigInteger, Boolean> regionalSet;
+    public HashMap<BigInteger, Boolean> regionalSet;
     public BigInteger targetNode;
 
     /**
