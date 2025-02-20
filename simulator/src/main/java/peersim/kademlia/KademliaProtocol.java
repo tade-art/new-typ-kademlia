@@ -71,9 +71,9 @@ public class KademliaProtocol implements EDProtocol {
 
   private KeyValueStore kv;
 
+  private double dynamicThreshold = 0.0;
+  private double smoothingFactor = 0.1; // Determines how fast threshold adapts
   private Set<BigInteger> detectedSybils = new HashSet<>();
-  private Map<BigInteger, Integer> nodeAppearanceCount = new HashMap<>();
-  private static final double DETECTION_THRESHOLD = 0.94;
 
   /**
    * Replicate this object by returning an identical copy.<br>
@@ -731,37 +731,38 @@ public class KademliaProtocol implements EDProtocol {
    * @param targetCID The content identifier (CID) being queried.
    */
   public void detectSybilAttack(BigInteger targetCID) {
-    // Step 1: Retrieve the 20 closest peers to the target CID
+    // Step 1: Get 20 closest peers to targetCID
     List<BigInteger> closestPeers = getClosestPeers(targetCID, KademliaCommonConfig.K);
     if (closestPeers.size() < KademliaCommonConfig.K) {
       System.out.println("Insufficient peers for analysis.");
       return;
     }
 
-    // Step 2: Calculate the observed distribution (q)
+    // Step 2: Compute observed distribution q
     Map<Integer, Integer> cplCount = new HashMap<>();
     for (BigInteger peerId : closestPeers) {
       int cpl = Util.prefixLen(targetCID, peerId);
       cplCount.put(cpl, cplCount.getOrDefault(cpl, 0) + 1);
     }
 
-    // Normalize to get the observed distribution q
+    // Normalize q
     Map<Integer, Double> q = new HashMap<>();
     for (Map.Entry<Integer, Integer> entry : cplCount.entrySet()) {
       q.put(entry.getKey(), entry.getValue() / (double) KademliaCommonConfig.K);
     }
 
-    // Step 3: Estimate the network size (N)
-    int networkSize = Network.size();
+    // Step 3 & 4: Estimate network size & compute expected distribution
+    Map<Integer, Double> p = computeExpectedDistribution(Network.size());
 
-    // Step 4: Compute the expected distribution (p)
-    Map<Integer, Double> p = computeExpectedDistribution(networkSize);
-
-    // Step 5: Calculate KL Divergence
+    // Step 5: Compute KL divergence
     double klDivergence = computeKLDivergence(p, q);
 
-    // Step 6: Detection decision
-    if (klDivergence > DETECTION_THRESHOLD) {
+    // Update threshold dynamically
+    updateDynamicThreshold(klDivergence);
+
+    // Step 6: Check if KL divergence exceeds threshold
+    if (klDivergence > dynamicThreshold) {
+      detectedSybils.add(targetCID);
       System.out.println("Potential Sybil attack detected! KL Divergence: " + klDivergence);
     } else {
       System.out.println("No Sybil attack detected. KL Divergence: " + klDivergence);
@@ -769,14 +770,24 @@ public class KademliaProtocol implements EDProtocol {
   }
 
   /**
-   * Retrieves the closest peers to the target CID.
-   *
-   * @param targetCID The content identifier.
+   * Updates the dynamic threshold for attack detection
+   * 
+   * @param newKLDivergence The KL divergence value to update
+   */
+  private void updateDynamicThreshold(double newKLDivergence) {
+    // Apply exponential smoothing to adjust the detection threshold dynamically
+    dynamicThreshold = (smoothingFactor * newKLDivergence) + ((1 - smoothingFactor) * dynamicThreshold);
+  }
+
+  /**
+   * Retrieves the K closest peers to the target content identifier (CID).
+   * 
+   * @param targetCID The CID being queried.
    * @param numPeers  The number of closest peers to retrieve.
-   * @return A list of peer IDs.
+   * @return A list of the closest peer IDs.
    */
   private List<BigInteger> getClosestPeers(BigInteger targetCID, int numPeers) {
-    // Utilize the routing table to find the closest peers
+    // Query the routing table to get the closest peers to the target CID
     BigInteger[] neighbors = this.routingTable.getNeighbours(targetCID, this.node.getId());
     List<BigInteger> closestPeers = new ArrayList<>();
     for (int i = 0; i < Math.min(numPeers, neighbors.length); i++) {
@@ -793,7 +804,11 @@ public class KademliaProtocol implements EDProtocol {
    */
   private Map<Integer, Double> computeExpectedDistribution(int networkSize) {
     Map<Integer, Double> p = new HashMap<>();
-    int m = (int) (Math.log(networkSize) / Math.log(2)); // Assuming m-bit identifiers
+
+    // Estimate the bit-length of node IDs based on network size
+    int m = (int) (Math.log(networkSize) / Math.log(2));
+
+    // Compute the expected probability for each CPL value using 2^(-i)
     for (int i = 0; i <= m; i++) {
       p.put(i, Math.pow(2, -i));
     }
@@ -805,14 +820,20 @@ public class KademliaProtocol implements EDProtocol {
    *
    * @param p The expected distribution.
    * @param q The observed distribution.
-   * @return The KL Divergence value.
+   * @return The KL divergence value.
    */
   private double computeKLDivergence(Map<Integer, Double> p, Map<Integer, Double> q) {
     double klDiv = 0.0;
+
+    // Iterate through all expected CPL values and compute divergence
     for (Map.Entry<Integer, Double> entry : p.entrySet()) {
       int cpl = entry.getKey();
       double pValue = entry.getValue();
-      double qValue = q.getOrDefault(cpl, 1e-10); // Avoid log(0) by using a small value
+
+      // Use a small value (1e-10) to prevent log(0) errors in case q lacks a CPL
+      double qValue = q.getOrDefault(cpl, 1e-10);
+
+      // Compute KL divergence: D_KL(P || Q) = Σ P(i) * log(P(i) / Q(i))
       klDiv += pValue * Math.log(pValue / qValue);
     }
     return klDiv;
