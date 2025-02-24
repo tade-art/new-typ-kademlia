@@ -444,6 +444,8 @@ public class KademliaProtocol implements EDProtocol {
    * @param myPid the sender Pid
    */
 
+  // INSTEAD OF RETURN NOTHING, POINT TO A MALICIOUS NOTE
+
   private void handleFind(Message m, int myPid) {
     if (this.node.isEvil()) {
       System.out.println("Malicious node " + this.node.getId() + " ignored FIND request.");
@@ -731,6 +733,15 @@ public class KademliaProtocol implements EDProtocol {
    * @param targetCID The content identifier (CID) being queried.
    */
   public void detectSybilAttack(BigInteger targetCID) {
+
+    // Check if the target CID is already flagged as Sybil
+    // If true then run mitigation
+    if (detectedSybils.contains(targetCID)) {
+      System.out.println("Potential Sybil attack detected on " + targetCID + ". Initiating mitigation.");
+      mitigateContentCensorship(targetCID);
+      return;
+    }
+
     // Step 1: Get 20 closest peers to targetCID
     List<BigInteger> closestPeers = getClosestPeers(targetCID, KademliaCommonConfig.K);
     if (closestPeers.size() < KademliaCommonConfig.K) {
@@ -763,9 +774,10 @@ public class KademliaProtocol implements EDProtocol {
     // Step 6: Check if KL divergence exceeds threshold
     if (klDivergence > dynamicThreshold) {
       detectedSybils.add(targetCID);
-      System.out.println("Potential Sybil attack detected! KL Divergence: " + klDivergence);
+      System.out.println("Confirmed Sybil attack on " + targetCID + ". Applying mitigation.");
+      mitigateContentCensorship(targetCID);
     } else {
-      System.out.println("No Sybil attack detected. KL Divergence: " + klDivergence);
+      System.out.println("No Sybil attack detected on " + targetCID + ".");
     }
   }
 
@@ -837,6 +849,67 @@ public class KademliaProtocol implements EDProtocol {
       klDiv += pValue * Math.log(pValue / qValue);
     }
     return klDiv;
+  }
+
+  // __________
+  // Mitigation
+  // __________
+
+  /**
+   * Implement region-based DHT queries for content resolution
+   */
+  public void mitigateContentCensorship(BigInteger contentId) {
+    // Step 1: Perform a region-based lookup using RegionBasedFindOperation
+    RegionBasedFindOperation regionFinder = new RegionBasedFindOperation(this.node.getId(), contentId,
+        KademliaCommonConfig.K, CommonState.getTime());
+
+    // Step 2: Extract the set of regional nodes
+    Map<BigInteger, Boolean> regionalSet = regionFinder.regionalSet;
+
+    // Step 3: Analyze results and filter out Sybil-dominated regions
+    List<BigInteger> legitimateResolvers = filterLegitimateResolvers(regionalSet);
+
+    if (legitimateResolvers.isEmpty()) {
+      System.out.println("Mitigation failed: No legitimate resolvers found. Content may be censored.");
+      return;
+    }
+
+    // Step 4: Attempt retrieval from the identified legitimate resolvers
+    retrieveContentFromResolvers(legitimateResolvers, contentId);
+  }
+
+  /**
+   * Filters out Sybil-dominated regions based on the observed resolver
+   * distribution.
+   * 
+   * @param regionalSet - Set of discovered nodes and their trustworthiness.
+   * @return List of legitimate resolvers.
+   */
+  private List<BigInteger> filterLegitimateResolvers(Map<BigInteger, Boolean> regionalSet) {
+    List<BigInteger> legitimateResolvers = new ArrayList<>();
+    for (Map.Entry<BigInteger, Boolean> entry : regionalSet.entrySet()) {
+      if (entry.getValue()) { // If the node is not suspected to be Sybil
+        legitimateResolvers.add(entry.getKey());
+      }
+    }
+    return legitimateResolvers;
+  }
+
+  /**
+   * Attempts to retrieve content from a set of legitimate resolvers.
+   * 
+   * @param resolvers - List of legitimate resolver nodes.
+   * @param contentId - The target content ID.
+   */
+  private void retrieveContentFromResolvers(List<BigInteger> resolvers, BigInteger contentId) {
+    for (BigInteger resolver : resolvers) {
+      Message request = new Message(Message.MSG_GET);
+      request.src = this.getNode();
+      request.dst = nodeIdtoNode(resolver).getKademliaProtocol().getNode();
+      request.body = contentId;
+
+      sendMessage(request, resolver, kademliaid);
+    }
   }
 
 }
