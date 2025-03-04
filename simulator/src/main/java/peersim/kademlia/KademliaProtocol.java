@@ -14,8 +14,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 // logging
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.logging.ConsoleHandler;
@@ -737,7 +739,6 @@ public class KademliaProtocol implements EDProtocol {
     // Check if the target CID is already flagged as Sybil
     // If true then run mitigation
     if (detectedSybils.contains(targetCID)) {
-      System.out.println("Potential Sybil attack detected on " + targetCID + ". Initiating mitigation.");
       mitigateContentCensorship(targetCID);
       return;
     }
@@ -859,14 +860,43 @@ public class KademliaProtocol implements EDProtocol {
    * Implement region-based DHT queries for content resolution
    */
   public void mitigateContentCensorship(BigInteger contentId) {
-    // Step 1: Perform a region-based lookup using RegionBasedFindOperation
-    RegionBasedFindOperation regionFinder = new RegionBasedFindOperation(this.node.getId(), contentId,
-        KademliaCommonConfig.K, CommonState.getTime());
+    System.out.println("Initiating region-based lookup for mitigation of content censorship on: " + contentId);
 
-    // Step 2: Extract the set of regional nodes
+    // Step 1: Initiate a region-based lookup using RegionBasedFindOperation
+    RegionBasedFindOperation regionFinder = new RegionBasedFindOperation(
+        this.node.getId(), contentId, KademliaCommonConfig.K, 0);
+    findOp.put(regionFinder.getId(), regionFinder); // Register operation
+
+    // **Fix: Populate regionalSet immediately using closest nodes**
+    regionFinder.elaborateResponse(this.routingTable.getNeighbours(contentId, this.node.getId()));
+
+    // Start lookup by sending ALPHA initial messages
+    Queue<BigInteger> toQuery = new LinkedList<>();
+    for (int i = 0; i < KademliaCommonConfig.ALPHA; i++) {
+      BigInteger nextNode = regionFinder.getNeighbour();
+      if (nextNode != null) {
+        toQuery.add(nextNode);
+      }
+    }
+
+    while (!toQuery.isEmpty()) {
+      BigInteger node = toQuery.poll();
+      Message request = new Message(Message.MSG_FIND_REGION_BASED);
+      request.src = this.getNode();
+      request.dst = nodeIdtoNode(node).getKademliaProtocol().getNode();
+      request.body = contentId;
+      request.operationId = regionFinder.getId();
+      sendMessage(request, node, kademliaid);
+
+      // Dynamically expand search by getting new neighbors
+      BigInteger newNeighbour = regionFinder.getNeighbour();
+      if (newNeighbour != null) {
+        toQuery.add(newNeighbour);
+      }
+    }
+
+    // Step 2: Extract regional nodes and classify them
     Map<BigInteger, Boolean> regionalSet = regionFinder.regionalSet;
-
-    // Step 3: Analyze results and filter out Sybil-dominated regions
     List<BigInteger> legitimateResolvers = filterLegitimateResolvers(regionalSet);
 
     if (legitimateResolvers.isEmpty()) {
@@ -874,7 +904,7 @@ public class KademliaProtocol implements EDProtocol {
       return;
     }
 
-    // Step 4: Attempt retrieval from the identified legitimate resolvers
+    // Step 3: Attempt retrieval from identified legitimate resolvers
     retrieveContentFromResolvers(legitimateResolvers, contentId);
   }
 
@@ -888,7 +918,7 @@ public class KademliaProtocol implements EDProtocol {
   private List<BigInteger> filterLegitimateResolvers(Map<BigInteger, Boolean> regionalSet) {
     List<BigInteger> legitimateResolvers = new ArrayList<>();
     for (Map.Entry<BigInteger, Boolean> entry : regionalSet.entrySet()) {
-      if (entry.getValue()) { // If the node is not suspected to be Sybil
+      if (entry.getValue()) {
         legitimateResolvers.add(entry.getKey());
       }
     }

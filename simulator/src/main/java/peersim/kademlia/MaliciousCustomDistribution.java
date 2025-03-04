@@ -23,12 +23,9 @@ public class MaliciousCustomDistribution implements peersim.core.Control {
         protocolID = Configuration.getPid(prefix + "." + PAR_PROT);
         sybilCount = Configuration.getInt(prefix + "." + PAR_SYBIL_COUNT);
         urg = new UniformRandomGenerator(KademliaCommonConfig.BITS, CommonState.r);
-        System.out.println("Sybil count: " + sybilCount);
     }
 
     public boolean execute() {
-        int totalSybilNodes = 0;
-
         for (int i = 0; i < Network.size(); ++i) {
             Node generalNode = Network.get(i);
             BigInteger id = urg.generate();
@@ -64,7 +61,6 @@ public class MaliciousCustomDistribution implements peersim.core.Control {
                     BigInteger sybilNodeID = urg.generate(); // Unique ID for each Sybil node
                     node = new KademliaNode(sybilNodeID, attackerID, "0.0.0.0", 0);
                     ((KademliaProtocol) (generalNode.getProtocol(protocolID))).setNode(node);
-                    totalSybilNodes++;
                 }
             }
 
@@ -73,8 +69,6 @@ public class MaliciousCustomDistribution implements peersim.core.Control {
             kadProt.setNode(node);
             kadProt.setProtocolID(protocolID);
         }
-
-        System.out.println("Total Sybil nodes created: " + totalSybilNodes);
         return false;
     }
 }
