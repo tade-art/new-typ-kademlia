@@ -18,6 +18,9 @@ public class MaliciousCustomDistribution implements peersim.core.Control {
     private int protocolID;
     private int sybilCount;
     private UniformRandomGenerator urg;
+    private static int totalSybilNodesCreated = 0;
+    private static KademliaNode firstHonestNode = null;
+    public static BigInteger firstHonestNodeID = null;
 
     public MaliciousCustomDistribution(String prefix) {
         protocolID = Configuration.getPid(prefix + "." + PAR_PROT);
@@ -31,37 +34,22 @@ public class MaliciousCustomDistribution implements peersim.core.Control {
             BigInteger id = urg.generate();
             KademliaNode node = null;
 
-            if (Math.random() < 0.7) {
-                node = new KademliaNode(id, "0.0.0.0", 0); // Honest node
-            } else {
-                // Ensure we select a valid victim node
-                KademliaNode victim = null;
-                Node victimNode = null;
+            if (firstHonestNode == null) {
+                firstHonestNodeID = id;
+                firstHonestNode = new KademliaNode(id, "0.0.0.0", 0);
+                node = firstHonestNode;
+                System.out.println("First honest node created with ID: " + id);
+            }
 
-                for (int attempts = 0; attempts < Network.size(); attempts++) {
-                    victimNode = Network.get(CommonState.r.nextInt(Network.size()));
-                    if (victimNode != null && victimNode.getProtocol(protocolID) instanceof KademliaProtocol) {
-                        victim = ((KademliaProtocol) victimNode.getProtocol(protocolID)).getNode();
-                        if (victim != null) {
-                            break; // Found a valid victim node
-                        }
-                    }
-                }
+            else if (totalSybilNodesCreated < sybilCount) {
+                BigInteger attackerID = firstHonestNode.getId();
+                BigInteger sybilNodeID = urg.generate(); // Unique ID for Sybil node
+                node = new KademliaNode(sybilNodeID, attackerID, "0.0.0.0", 0);
+                totalSybilNodesCreated++;
+            }
 
-                if (victim == null) {
-                    System.err.println("Error: Could not find a valid victim node.");
-                    return false; // Stop execution if no valid victim found
-                }
-
-                // System.out.println("Victim selected: ID = " + victim.getId());
-
-                // Generate Sybil nodes with attacker's ID
-                BigInteger attackerID = victim.getId();
-                for (int j = 0; j < sybilCount; j++) {
-                    BigInteger sybilNodeID = urg.generate(); // Unique ID for each Sybil node
-                    node = new KademliaNode(sybilNodeID, attackerID, "0.0.0.0", 0);
-                    ((KademliaProtocol) (generalNode.getProtocol(protocolID))).setNode(node);
-                }
+            else {
+                node = new KademliaNode(id, "0.0.0.0", 0);
             }
 
             KademliaProtocol kadProt = ((KademliaProtocol) (generalNode.getProtocol(protocolID)));

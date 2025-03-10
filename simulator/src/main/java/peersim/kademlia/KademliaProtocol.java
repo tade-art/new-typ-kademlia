@@ -74,7 +74,7 @@ public class KademliaProtocol implements EDProtocol {
   private KeyValueStore kv;
 
   private double dynamicThreshold = 0.0;
-  private double smoothingFactor = 0.1; // Determines how fast threshold adapts
+  private double smoothingFactor = 0.5; // Determines how fast threshold adapts
   private Set<BigInteger> detectedSybils = new HashSet<>();
 
   /**
@@ -172,7 +172,7 @@ public class KademliaProtocol implements EDProtocol {
     BigInteger mId;
     for (int i = Network.size() - 1; i >= 0; i--) {
       mId = ((KademliaProtocol) Network.get(i).getProtocol(kademliaid)).getNode().getId();
-      // System.out.println("mID: " + mId + "| Search Node: " + searchNodeId);
+      System.out.println("mID: " + mId + "| Search Node: " + searchNodeId);
       if (mId.equals(searchNodeId))
         return Network.get(i);
     }
@@ -725,9 +725,19 @@ public class KademliaProtocol implements EDProtocol {
     logger.addHandler(handler);
   }
 
+  // -----------
+  // -----------
+  // -----------
+  // -----------
+  // -----------
   // _________
   // Detection
   // _________
+  // -----------
+  // -----------
+  // -----------
+  // -----------
+  // -----------
 
   /**
    * Detects potential Sybil attacks based on the distribution of peer IDs.
@@ -771,6 +781,8 @@ public class KademliaProtocol implements EDProtocol {
 
     // Update threshold dynamically
     updateDynamicThreshold(klDivergence);
+
+    System.out.println("KL Divergence: " + klDivergence + ", Threshold: " + dynamicThreshold);
 
     // Step 6: Check if KL divergence exceeds threshold
     if (klDivergence > dynamicThreshold) {
@@ -852,9 +864,19 @@ public class KademliaProtocol implements EDProtocol {
     return klDiv;
   }
 
+  // -----------
+  // -----------
+  // -----------
+  // -----------
+  // -----------
   // __________
   // Mitigation
   // __________
+  // -----------
+  // -----------
+  // -----------
+  // -----------
+  // -----------
 
   /**
    * Implement region-based DHT queries for content resolution
@@ -870,7 +892,6 @@ public class KademliaProtocol implements EDProtocol {
     // **Fix: Populate regionalSet immediately using closest nodes**
     regionFinder.elaborateResponse(this.routingTable.getNeighbours(contentId, this.node.getId()));
 
-    // Start lookup by sending ALPHA initial messages
     Queue<BigInteger> toQuery = new LinkedList<>();
     for (int i = 0; i < KademliaCommonConfig.ALPHA; i++) {
       BigInteger nextNode = regionFinder.getNeighbour();
@@ -898,6 +919,8 @@ public class KademliaProtocol implements EDProtocol {
     // Step 2: Extract regional nodes and classify them
     Map<BigInteger, Boolean> regionalSet = regionFinder.regionalSet;
     List<BigInteger> legitimateResolvers = filterLegitimateResolvers(regionalSet);
+
+    System.out.println("Regional Set: " + regionFinder.regionalSet);
 
     if (legitimateResolvers.isEmpty()) {
       System.out.println("Mitigation failed: No legitimate resolvers found. Content may be censored.");

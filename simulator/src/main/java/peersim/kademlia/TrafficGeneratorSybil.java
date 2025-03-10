@@ -12,43 +12,68 @@ import peersim.core.Node;
 import peersim.edsim.EDSimulator;
 
 /**
- * Generates malicious Sybil traffic targeting honest nodes.
+ * This control generates random search traffic from nodes to random destination
+ * node.
+ *
+ * @author Daniele Furlan, Maurizio Bonani
+ * @version 1.0
  */
+
+// ______________________________________________________________________________________________
 public class TrafficGeneratorSybil implements Control {
 
+    // ______________________________________________________________________________________________
+    /** MSPastry Protocol to act */
     private static final String PAR_PROT = "protocol";
+
+    /** MSPastry Protocol ID to act */
     private final int pid;
+
     private boolean first = true;
 
+    // ______________________________________________________________________________________________
     public TrafficGeneratorSybil(String prefix) {
         pid = Configuration.getPid(prefix + "." + PAR_PROT);
     }
 
-    private Message generateHonestPutMessage() {
-        try {
-            String topic = "t1";
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(topic.getBytes(StandardCharsets.UTF_8));
-            BigInteger id = new BigInteger(1, hash);
-            String data = "GOOD DATA HERE";
-            Message m = Message.makeInitPutValue(id, data);
-            m.timestamp = CommonState.getTime();
-            System.out.println("Sybil PUT message sent: " + m.body);
-            return m;
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
+    // ______________________________________________________________________________________________
+    /**
+     * generates a PUT message for t1 key and string message
+     *
+     * @return Message
+     */
+    private Message generatePutMessage() {
+        if (MaliciousCustomDistribution.firstHonestNodeID == null) {
+            System.err.println("Error: First honest node ID is not set!");
             return null;
         }
+
+        BigInteger id = MaliciousCustomDistribution.firstHonestNodeID;
+        String value = "hello";
+        Message m = Message.makeInitPutValue(id, value);
+        m.timestamp = CommonState.getTime();
+        System.out.println("PUT message sent to honest node ID: " + id);
+        return m;
     }
 
-    private Message generateHonestGetMessage() {
+    // ______________________________________________________________________________________________
+    /**
+     * generates a GET message for t1 key.
+     *
+     * @return Message
+     */
+    private Message generateGetMessage() {
+
+        MessageDigest digest;
+        BigInteger id;
         try {
             String topic = "t1";
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(topic.getBytes(StandardCharsets.UTF_8));
-            BigInteger id = new BigInteger(1, hash);
+            id = new BigInteger(1, hash);
             Message m = Message.makeInitGetValue(id);
             m.timestamp = CommonState.getTime();
+
             return m;
         } catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
@@ -56,23 +81,29 @@ public class TrafficGeneratorSybil implements Control {
         }
     }
 
+    // ______________________________________________________________________________________________
+    /**
+     * every call of this control generates and send a random find node message
+     *
+     * @return boolean
+     */
     public boolean execute() {
-        // Select a random honest node to store data
-        Node targetNode;
+
+        Node start;
         do {
-            targetNode = Network.get(CommonState.r.nextInt(Network.size()));
-        } while (targetNode == null || ((KademliaProtocol) targetNode.getProtocol(pid)).getNode().isEvil());
+            start = Network.get(CommonState.r.nextInt(Network.size()));
+        } while ((start == null) || (!start.isUp()));
 
-        System.out
-                .println("Storing data at node: " + ((KademliaProtocol) targetNode.getProtocol(pid)).getNode().getId());
-
-        // Step 1: PUT data into the network
-        EDSimulator.add(0, generateHonestPutMessage(), targetNode, pid);
-
-        // Step 2: After some delay, attempt to GET the data
-        EDSimulator.add(5000, generateHonestGetMessage(), targetNode, pid);
-
+        if (first) {
+            EDSimulator.add(0, generatePutMessage(), start, pid);
+            first = false;
+        } else {
+            EDSimulator.add(0, generateGetMessage(), start, pid);
+        }
         return false;
     }
 
-}
+    // ______________________________________________________________________________________________
+
+} // End of class
+  // ______________________________________________________________________________________________
