@@ -347,13 +347,9 @@ public class KademliaProtocol implements EDProtocol {
    * @param myPid the sender Pid
    */
   private void handlePut(Message m, int myPid) {
-    if (this.node.isEvil()) {
-      System.out.println("Malicious node " + this.node.getId() + " ignored PUT request.");
-      return; // Ignore the request
-    }
     BigInteger key = (BigInteger) m.body;
     kv.add(key, m.value);
-    System.out.println("saved to kv with val: " + m.value);
+    // System.out.println("saved to kv with val: " + m.value);
 
     PutOperation putOp = new PutOperation(this.node.getId(), key, CommonState.getTime());
     putOp.setValue(m.value);
@@ -881,90 +877,50 @@ public class KademliaProtocol implements EDProtocol {
   // -----------
   // -----------
 
-  /**
-   * Implement region-based DHT queries for content resolution
-   */
   public void mitigateContentCensorship(BigInteger contentId) {
     System.out.println("Initiating region-based lookup for mitigation of content censorship on: " + contentId);
 
-    // Step 1: Initiate a region-based lookup using RegionBasedFindOperation
-    RegionBasedFindOperation regionFinder = new RegionBasedFindOperation(
-        this.node.getId(), contentId, KademliaCommonConfig.K, 0);
-    findOp.put(regionFinder.getId(), regionFinder); // Register operation
+    // Step 1: Start a region-based find operation
+    RegionBasedFindOperation findOp = new RegionBasedFindOperation(this.node.getId(), contentId, KademliaCommonConfig.K,
+        CommonState.getTime());
+    BigInteger[] initialNeighbours = this.routingTable.getNeighbours(contentId, this.node.getId());
+    findOp.elaborateResponse(initialNeighbours);
+    findOp.setAvailableRequests(KademliaCommonConfig.ALPHA);
+    findOp.setBody(contentId);
+    this.findOp.put(findOp.getId(), findOp);
 
-    // **Fix: Populate regionalSet immediately using closest nodes**
-    regionFinder.elaborateResponse(this.routingTable.getNeighbours(contentId, this.node.getId()));
-
-    Queue<BigInteger> toQuery = new LinkedList<>();
+    // Step 2: Send initial FIND_REGION_BASED messages to ALPHA nodes
     for (int i = 0; i < KademliaCommonConfig.ALPHA; i++) {
-      BigInteger nextNode = regionFinder.getNeighbour();
+      BigInteger nextNode = findOp.getNeighbour();
       if (nextNode != null) {
-        toQuery.add(nextNode);
+        Message request = new Message(Message.MSG_FIND_REGION_BASED);
+        request.operationId = findOp.getId();
+        request.src = this.getNode();
+        request.dst = nodeIdtoNode(nextNode).getKademliaProtocol().getNode();
+        request.body = contentId;
+        System.out.println("Sending FIND_REGION_BASED message to: " + nextNode);
+        sendMessage(request, nextNode, this.kademliaid);
+        findOp.addHops(1);
       }
     }
 
-    while (!toQuery.isEmpty()) {
-      BigInteger node = toQuery.poll();
-      Message request = new Message(Message.MSG_FIND_REGION_BASED);
-      request.src = this.getNode();
-      request.dst = nodeIdtoNode(node).getKademliaProtocol().getNode();
-      request.body = contentId;
-      request.operationId = regionFinder.getId();
-      sendMessage(request, node, kademliaid);
-
-      // Dynamically expand search by getting new neighbors
-      BigInteger newNeighbour = regionFinder.getNeighbour();
-      if (newNeighbour != null) {
-        toQuery.add(newNeighbour);
+    // Step 3: Collect honest nodes from the regional set
+    Set<BigInteger> honestNodes = new HashSet<>();
+    for (BigInteger node : findOp.regionalSet.keySet()) {
+      if (!detectedSybils.contains(node)) { // Only select honest nodes
+        honestNodes.add(node);
       }
     }
+    System.out.println("Honest nodes found: " + honestNodes);
 
-    // Step 2: Extract regional nodes and classify them
-    Map<BigInteger, Boolean> regionalSet = regionFinder.regionalSet;
-    List<BigInteger> legitimateResolvers = filterLegitimateResolvers(regionalSet);
-
-    System.out.println("Regional Set: " + regionFinder.regionalSet);
-
-    if (legitimateResolvers.isEmpty()) {
-      System.out.println("Mitigation failed: No legitimate resolvers found. Content may be censored.");
-      return;
-    }
-
-    // Step 3: Attempt retrieval from identified legitimate resolvers
-    retrieveContentFromResolvers(legitimateResolvers, contentId);
-  }
-
-  /**
-   * Filters out Sybil-dominated regions based on the observed resolver
-   * distribution.
-   * 
-   * @param regionalSet - Set of discovered nodes and their trustworthiness.
-   * @return List of legitimate resolvers.
-   */
-  private List<BigInteger> filterLegitimateResolvers(Map<BigInteger, Boolean> regionalSet) {
-    List<BigInteger> legitimateResolvers = new ArrayList<>();
-    for (Map.Entry<BigInteger, Boolean> entry : regionalSet.entrySet()) {
-      if (entry.getValue()) {
-        legitimateResolvers.add(entry.getKey());
-      }
-    }
-    return legitimateResolvers;
-  }
-
-  /**
-   * Attempts to retrieve content from a set of legitimate resolvers.
-   * 
-   * @param resolvers - List of legitimate resolver nodes.
-   * @param contentId - The target content ID.
-   */
-  private void retrieveContentFromResolvers(List<BigInteger> resolvers, BigInteger contentId) {
-    for (BigInteger resolver : resolvers) {
-      Message request = new Message(Message.MSG_GET);
-      request.src = this.getNode();
-      request.dst = nodeIdtoNode(resolver).getKademliaProtocol().getNode();
-      request.body = contentId;
-
-      sendMessage(request, resolver, kademliaid);
+    // Step 4: Attempt to contact honest nodes for content retrieval
+    for (BigInteger honestNode : honestNodes) {
+      Message getRequest = new Message(Message.MSG_GET);
+      getRequest.src = this.getNode();
+      getRequest.dst = nodeIdtoNode(honestNode).getKademliaProtocol().getNode();
+      getRequest.body = contentId;
+      System.out.println("Requesting content from honest node: " + honestNode);
+      sendMessage(getRequest, honestNode, this.kademliaid);
     }
   }
 

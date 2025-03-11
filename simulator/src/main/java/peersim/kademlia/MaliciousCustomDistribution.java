@@ -45,6 +45,7 @@ public class MaliciousCustomDistribution implements peersim.core.Control {
                 BigInteger attackerID = firstHonestNode.getId();
                 BigInteger sybilNodeID = urg.generate(); // Unique ID for Sybil node
                 node = new KademliaNode(sybilNodeID, attackerID, "0.0.0.0", 0);
+                // System.out.println("Generated Sybil node with ID: " + sybilNodeID);
                 totalSybilNodesCreated++;
             }
 
