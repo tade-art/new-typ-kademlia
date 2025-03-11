@@ -172,13 +172,14 @@ public class KademliaProtocol implements EDProtocol {
     BigInteger mId;
     for (int i = Network.size() - 1; i >= 0; i--) {
       mId = ((KademliaProtocol) Network.get(i).getProtocol(kademliaid)).getNode().getId();
-      System.out.println("mID: " + mId + "| Search Node: " + searchNodeId);
+      // System.out.println("mID: " + mId + "| Search Node: " + searchNodeId);
       if (mId.equals(searchNodeId))
         return Network.get(i);
     }
 
-    System.err.println(
-        "Error: Node with ID " + searchNodeId + " not found in network! Current network size: " + Network.size());
+    // System.err.println(
+    // "Error: Node with ID " + searchNodeId + " not found in network! Current
+    // network size: " + Network.size());
     return null;
   }
 
@@ -268,6 +269,8 @@ public class KademliaProtocol implements EDProtocol {
               request = new Message(Message.MSG_GET);
             else if (KademliaCommonConfig.FINDMODE == 0)
               request = new Message(Message.MSG_FIND);
+            else if (fop instanceof RegionBasedFindOperation)
+              request = new Message(Message.MSG_FIND_REGION_BASED);
             else
               request = new Message(Message.MSG_FIND_DIST);
             request.operationId = m.operationId;
@@ -286,10 +289,6 @@ public class KademliaProtocol implements EDProtocol {
         } else if (fop.getAvailableRequests() == KademliaCommonConfig.ALPHA) { // no new neighbour and no outstanding
                                                                                // requests
           // search operation finished
-
-          System.out.println("fop finished but fop.getAvailableRequests() == KademliaCommonConfig.ALPHA is "
-              + (fop.getAvailableRequests() == KademliaCommonConfig.ALPHA));
-
           if (fop instanceof PutOperation) {
             for (BigInteger id : fop.getNeighboursList()) {
               // create a put request
@@ -745,52 +744,56 @@ public class KademliaProtocol implements EDProtocol {
    * @param targetCID The content identifier (CID) being queried.
    */
   public void detectSybilAttack(BigInteger targetCID) {
+    // Validate that the targetCID exists in the network
+    Node targetNode = nodeIdtoNode(targetCID);
 
-    // Check if the target CID is already flagged as Sybil
-    // If true then run mitigation
-    if (detectedSybils.contains(targetCID)) {
-      mitigateContentCensorship(targetCID);
-      return;
-    }
+    if (targetNode != null) {
+      // Check if the target CID is already flagged as Sybil
+      // If true then run mitigation
+      if (detectedSybils.contains(targetCID)) {
+        mitigateContentCensorship(targetCID);
+        return;
+      }
 
-    // Step 1: Get 20 closest peers to targetCID
-    List<BigInteger> closestPeers = getClosestPeers(targetCID, KademliaCommonConfig.K);
-    if (closestPeers.size() < KademliaCommonConfig.K) {
-      System.out.println("Insufficient peers for analysis.");
-      return;
-    }
+      // Step 1: Get 20 closest peers to targetCID
+      List<BigInteger> closestPeers = getClosestPeers(targetCID, KademliaCommonConfig.K);
+      if (closestPeers.size() < KademliaCommonConfig.K) {
+        System.out.println("Insufficient peers for analysis.");
+        return;
+      }
 
-    // Step 2: Compute observed distribution q
-    Map<Integer, Integer> cplCount = new HashMap<>();
-    for (BigInteger peerId : closestPeers) {
-      int cpl = Util.prefixLen(targetCID, peerId);
-      cplCount.put(cpl, cplCount.getOrDefault(cpl, 0) + 1);
-    }
+      // Step 2: Compute observed distribution q
+      Map<Integer, Integer> cplCount = new HashMap<>();
+      for (BigInteger peerId : closestPeers) {
+        int cpl = Util.prefixLen(targetCID, peerId);
+        cplCount.put(cpl, cplCount.getOrDefault(cpl, 0) + 1);
+      }
 
-    // Normalize q
-    Map<Integer, Double> q = new HashMap<>();
-    for (Map.Entry<Integer, Integer> entry : cplCount.entrySet()) {
-      q.put(entry.getKey(), entry.getValue() / (double) KademliaCommonConfig.K);
-    }
+      // Normalize q
+      Map<Integer, Double> q = new HashMap<>();
+      for (Map.Entry<Integer, Integer> entry : cplCount.entrySet()) {
+        q.put(entry.getKey(), entry.getValue() / (double) KademliaCommonConfig.K);
+      }
 
-    // Step 3 & 4: Estimate network size & compute expected distribution
-    Map<Integer, Double> p = computeExpectedDistribution(Network.size());
+      // Step 3 & 4: Estimate network size & compute expected distribution
+      Map<Integer, Double> p = computeExpectedDistribution(Network.size());
 
-    // Step 5: Compute KL divergence
-    double klDivergence = computeKLDivergence(p, q);
+      // Step 5: Compute KL divergence
+      double klDivergence = computeKLDivergence(p, q);
 
-    // Update threshold dynamically
-    updateDynamicThreshold(klDivergence);
+      // Update threshold dynamically
+      updateDynamicThreshold(klDivergence);
 
-    System.out.println("KL Divergence: " + klDivergence + ", Threshold: " + dynamicThreshold);
+      System.out.println("KL Divergence: " + klDivergence + ", Threshold: " + dynamicThreshold);
 
-    // Step 6: Check if KL divergence exceeds threshold
-    if (klDivergence > dynamicThreshold) {
-      detectedSybils.add(targetCID);
-      System.out.println("Confirmed Sybil attack on " + targetCID + ". Applying mitigation.");
-      mitigateContentCensorship(targetCID);
-    } else {
-      System.out.println("No Sybil attack detected on " + targetCID + ".");
+      // Step 6: Check if KL divergence exceeds threshold
+      if (klDivergence > dynamicThreshold) {
+        detectedSybils.add(targetCID);
+        System.out.println("Confirmed Sybil attack on " + targetCID + ". Applying mitigation.");
+        mitigateContentCensorship(targetCID);
+      } else {
+        System.out.println("No Sybil attack detected on " + targetCID + ".");
+      }
     }
   }
 
