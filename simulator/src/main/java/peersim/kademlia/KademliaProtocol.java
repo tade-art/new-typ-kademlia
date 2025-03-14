@@ -14,10 +14,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 // logging
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.logging.ConsoleHandler;
@@ -217,7 +215,6 @@ public class KademliaProtocol implements EDProtocol {
 
       if (!fop.isFinished() && Arrays.asList(neighbours).contains(fop.getDestNode())) {
         logger.warning("Found node " + fop.getDestNode());
-
         KademliaObserver.find_ok.add(1);
         fop.setFinished(true);
       }
@@ -236,8 +233,6 @@ public class KademliaProtocol implements EDProtocol {
           response.operationId = fop.getId();
           response.dst = m.src;
           response.src = this.getNode();
-          // response.body = new BigInteger[] { (BigInteger) m.body };
-          // response.body = (BigInteger) m.body;
           response.body = m.body;
           response.value = m.value;
           response.ackId = m.ackId;
@@ -300,7 +295,6 @@ public class KademliaProtocol implements EDProtocol {
               request.value = ((PutOperation) fop).getValue();
               // increment hop count
               fop.addHops(1);
-              System.out.println("sent PUT msg out");
               sendMessage(request, id, myPid);
             }
             logger.warning("Sending PUT_VALUE to " + fop.getNeighboursList().size() + " nodes");
@@ -348,14 +342,36 @@ public class KademliaProtocol implements EDProtocol {
    */
   private void handlePut(Message m, int myPid) {
     BigInteger key = (BigInteger) m.body;
-    kv.add(key, m.value);
-    // System.out.println("saved to kv with val: " + m.value);
+
+    if (MaliciousCustomDistribution.knownMaliciousNodes.contains(this.node.getId())) {
+      System.out.println("Attempted to store data on malicious node: " + this.node.getId() + ". Selecting a new node.");
+
+      // Find a new honest node
+      BigInteger newNode = findNewHonestNode();
+      if (newNode != null) {
+        System.out.println("Redirecting storage to honest node: " + newNode);
+        Node targetNode = nodeIdtoNode(newNode);
+        if (targetNode != null) {
+          KademliaProtocol targetProtocol = (KademliaProtocol) targetNode.getProtocol(myPid);
+          targetProtocol.kv.add(key, m.value);
+        }
+      } else {
+        System.out.println("No suitable honest node found. Skipping storage.");
+      }
+    } else {
+      kv.add(key, m.value);
+      System.out.println("Data stored successfully on honest node: " + this.node.getId());
+    }
 
     PutOperation putOp = new PutOperation(this.node.getId(), key, CommonState.getTime());
     putOp.setValue(m.value);
     putOp.setBody(key);
     putOp.setAvailableRequests(KademliaCommonConfig.ALPHA);
     putOp.setFinished(false);
+
+    // BigInteger[] initialNeighbours = this.routingTable.getNeighbours(key,
+    // this.node.getId());
+    // putOp.elaborateResponse(initialNeighbours);
 
     findOp.put(putOp.getId(), putOp);
 
@@ -440,8 +456,6 @@ public class KademliaProtocol implements EDProtocol {
    * @param m     Message
    * @param myPid the sender Pid
    */
-
-  // INSTEAD OF RETURN NOTHING, POINT TO A MALICIOUS NOTE
 
   private void handleFind(Message m, int myPid) {
     if (this.node.isEvil()) {
@@ -780,8 +794,6 @@ public class KademliaProtocol implements EDProtocol {
       // Update threshold dynamically
       updateDynamicThreshold(klDivergence);
 
-      System.out.println("KL Divergence: " + klDivergence + ", Threshold: " + dynamicThreshold);
-
       // Step 6: Check if KL divergence exceeds threshold
       if (klDivergence > dynamicThreshold) {
         detectedSybils.add(targetCID);
@@ -898,7 +910,6 @@ public class KademliaProtocol implements EDProtocol {
         request.src = this.getNode();
         request.dst = nodeIdtoNode(nextNode).getKademliaProtocol().getNode();
         request.body = contentId;
-        System.out.println("Sending FIND_REGION_BASED message to: " + nextNode);
         sendMessage(request, nextNode, this.kademliaid);
         findOp.addHops(1);
       }
@@ -911,7 +922,6 @@ public class KademliaProtocol implements EDProtocol {
         honestNodes.add(node);
       }
     }
-    System.out.println("Honest nodes found: " + honestNodes);
 
     // Step 4: Attempt to contact honest nodes for content retrieval
     for (BigInteger honestNode : honestNodes) {
@@ -919,9 +929,26 @@ public class KademliaProtocol implements EDProtocol {
       getRequest.src = this.getNode();
       getRequest.dst = nodeIdtoNode(honestNode).getKademliaProtocol().getNode();
       getRequest.body = contentId;
-      System.out.println("Requesting content from honest node: " + honestNode);
       sendMessage(getRequest, honestNode, this.kademliaid);
     }
+  }
+
+  private BigInteger findNewHonestNode() {
+    List<BigInteger> allNodes = getAllKnownNodes();
+    for (BigInteger nodeId : allNodes) {
+      if (!MaliciousCustomDistribution.knownMaliciousNodes.contains(nodeId)) {
+        return nodeId; // Return the first honest node found
+      }
+    }
+    return null; // No honest node found
+  }
+
+  private List<BigInteger> getAllKnownNodes() {
+    List<BigInteger> allNodes = new ArrayList<>();
+    for (int i = 0; i <= routingTable.nBuckets; i++) {
+      allNodes.addAll(routingTable.k_buckets.get(i).neighbours.keySet());
+    }
+    return allNodes;
   }
 
 }

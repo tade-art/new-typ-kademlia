@@ -1,6 +1,9 @@
 package peersim.kademlia;
 
 import java.math.BigInteger;
+import java.util.HashSet;
+import java.util.Set;
+
 import peersim.config.Configuration;
 import peersim.core.CommonState;
 import peersim.core.Network;
@@ -21,6 +24,7 @@ public class MaliciousCustomDistribution implements peersim.core.Control {
     private static int totalSybilNodesCreated = 0;
     private static KademliaNode firstHonestNode = null;
     public static BigInteger firstHonestNodeID = null;
+    public static final Set<BigInteger> knownMaliciousNodes = new HashSet<>();
 
     public MaliciousCustomDistribution(String prefix) {
         protocolID = Configuration.getPid(prefix + "." + PAR_PROT);
@@ -45,6 +49,7 @@ public class MaliciousCustomDistribution implements peersim.core.Control {
                 BigInteger attackerID = firstHonestNode.getId();
                 BigInteger sybilNodeID = urg.generate(); // Unique ID for Sybil node
                 node = new KademliaNode(sybilNodeID, attackerID, "0.0.0.0", 0);
+                knownMaliciousNodes.add(sybilNodeID);
                 // System.out.println("Generated Sybil node with ID: " + sybilNodeID);
                 totalSybilNodesCreated++;
             }
