@@ -53,12 +53,10 @@ To edit a config file, you have to understand how the config files are read and 
 
 Using 'config/kademlia_putget.cfg' as an example, these fields can be edited to change the output of the simulation
 ```shell
-init.1uniqueNodeID peersim.kademlia.MaliciousCustomDistribution
+init.1uniqueNodeID peersim.kademlia.CustomDistribution
 init.1uniqueNodeID.protocol 3kademlia
-init.1uniqueNodeID.sybil.count 16
 ```
 - kademlia.* - This is the file used to initalise the distribution of nodes, currently there are only two files to be selected from
-- sybil.count - This field is used to initalise the amount of sybil nodes that are placed within the network, can be changed to add in more or less nodes
 
 ```shell
 #TrafficGenerator class sends and initial 
