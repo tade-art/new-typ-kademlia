@@ -344,23 +344,16 @@ public class KademliaProtocol implements EDProtocol {
     BigInteger key = (BigInteger) m.body;
 
     if (MaliciousCustomDistribution.knownMaliciousNodes.contains(this.node.getId())) {
-      System.out.println("Attempted to store data on malicious node: " + this.node.getId() + ". Selecting a new node.");
-
-      // Find a new honest node
       BigInteger newNode = findNewHonestNode();
       if (newNode != null) {
-        System.out.println("Redirecting storage to honest node: " + newNode);
         Node targetNode = nodeIdtoNode(newNode);
         if (targetNode != null) {
           KademliaProtocol targetProtocol = (KademliaProtocol) targetNode.getProtocol(myPid);
           targetProtocol.kv.add(key, m.value);
         }
-      } else {
-        System.out.println("No suitable honest node found. Skipping storage.");
       }
     } else {
       kv.add(key, m.value);
-      System.out.println("Data stored successfully on honest node: " + this.node.getId());
     }
 
     PutOperation putOp = new PutOperation(this.node.getId(), key, CommonState.getTime());
@@ -892,6 +885,9 @@ public class KademliaProtocol implements EDProtocol {
   public void mitigateContentCensorship(BigInteger contentId) {
     System.out.println("Initiating region-based lookup for mitigation of content censorship on: " + contentId);
 
+    boolean mitigationSuccessful = false;
+    int dhtLookups = 0;
+
     // Step 1: Start a region-based find operation
     RegionBasedFindOperation findOp = new RegionBasedFindOperation(this.node.getId(), contentId, KademliaCommonConfig.K,
         CommonState.getTime());
@@ -912,6 +908,7 @@ public class KademliaProtocol implements EDProtocol {
         request.body = contentId;
         sendMessage(request, nextNode, this.kademliaid);
         findOp.addHops(1);
+        dhtLookups++;
       }
     }
 
@@ -930,7 +927,12 @@ public class KademliaProtocol implements EDProtocol {
       getRequest.dst = nodeIdtoNode(honestNode).getKademliaProtocol().getNode();
       getRequest.body = contentId;
       sendMessage(getRequest, honestNode, this.kademliaid);
+      dhtLookups++;
+      mitigationSuccessful = true;
     }
+
+    KademliaObserver.logMitigationAttempt(mitigationSuccessful);
+    KademliaObserver.logDHTLookups(dhtLookups);
   }
 
   private BigInteger findNewHonestNode() {

@@ -13,7 +13,8 @@ import peersim.core.Network;
 import peersim.util.IncrementalStats;
 
 /**
- * This class implements a simple observer of search time and hop average in finding a node in the
+ * This class implements a simple observer of search time and hop average in
+ * finding a node in the
  * network
  *
  * @author Daniele Furlan, Maurizio Bonani
@@ -36,14 +37,19 @@ public class KademliaObserver implements Control {
   /** keep statistic of number of find operation */
   public static IncrementalStats find_op = new IncrementalStats();
 
+  /** keep statistic of mitigation success */
+  public static IncrementalStats mitigationSuccess = new IncrementalStats();
+
+  /** keep statistic of DHT lookups per mitigation */
+  public static IncrementalStats dhtLookupOverhead = new IncrementalStats();
+
   /** Parameter of the protocol we want to observe */
   private static final String PAR_PROT = "protocol";
 
   /** Successfull find operations */
   public static IncrementalStats find_ok = new IncrementalStats();
 
-  private static HashMap<String, Map<String, Object>> messages =
-      new HashMap<String, Map<String, Object>>();
+  private static HashMap<String, Map<String, Object>> messages = new HashMap<String, Map<String, Object>>();
 
   /** Name of the folder where experiment logs are written */
   private static String logFolderName;
@@ -53,7 +59,6 @@ public class KademliaObserver implements Control {
 
   public KademliaObserver(String prefix) {
     observerStep = Configuration.getInt(prefix + "." + PAR_STEP);
-
     logFolderName = "./logs";
   }
 
@@ -91,7 +96,33 @@ public class KademliaObserver implements Control {
       directory.mkdir();
     }
     if (!messages.isEmpty()) {
-      writeMap(messages, logFolderName + "/" + "messages.csv");
+      writeMap(messages, logFolderName + "/messages.csv");
+    }
+    writeMetricsToCSV();
+  }
+
+  public static void logMitigationAttempt(boolean success) {
+    mitigationSuccess.add(success ? 1 : 0);
+  }
+
+  public static void logDHTLookups(int lookups) {
+    dhtLookupOverhead.add(lookups);
+  }
+
+  private static void writeMetricsToCSV() {
+    File directory = new File(logFolderName);
+    if (!directory.exists()) {
+      directory.mkdir();
+    }
+    String filename = logFolderName + "/metrics.csv";
+    try (FileWriter writer = new FileWriter(filename)) {
+      writer.write("Time,MitigationSuccessRate,DHTLookups\n");
+      writer.write(
+          CommonState.getTime() + "," +
+              (mitigationSuccess.getAverage() * 100) + "," +
+              dhtLookupOverhead.getAverage() + "\n");
+    } catch (IOException e) {
+      e.printStackTrace();
     }
   }
 
@@ -103,22 +134,23 @@ public class KademliaObserver implements Control {
   public boolean execute() {
     // get the real network size
     int sz = Network.size();
-    for (int i = 0; i < Network.size(); i++) if (!Network.get(i).isUp()) sz--;
+    for (int i = 0; i < Network.size(); i++)
+      if (!Network.get(i).isUp())
+        sz--;
 
     System.gc();
-    String s =
-        String.format(
-            "[time=%d]:[N=%d current nodes UP] [D=%f msg deliv] [%f min h] [%f average h] [%f max h] [%d min l] [%d msec average l] [%d max l] [%d find msg sent]",
-            CommonState.getTime(),
-            sz,
-            msg_deliv.getSum(),
-            hopStore.getMin(),
-            hopStore.getAverage(),
-            hopStore.getMax(),
-            (int) timeStore.getMin(),
-            (int) timeStore.getAverage(),
-            (int) timeStore.getMax(),
-            (int) find_op.getSum());
+    String s = String.format(
+        "[time=%d]:[N=%d current nodes UP] [D=%f msg deliv] [%f min h] [%f average h] [%f max h] [%d min l] [%d msec average l] [%d max l] [%d find msg sent]",
+        CommonState.getTime(),
+        sz,
+        msg_deliv.getSum(),
+        hopStore.getMin(),
+        hopStore.getAverage(),
+        hopStore.getMax(),
+        (int) timeStore.getMin(),
+        (int) timeStore.getAverage(),
+        (int) timeStore.getMax(),
+        (int) find_op.getSum());
 
     if (CommonState.getEndTime() <= (observerStep + CommonState.getTime())) {
       // Last execute cycle of the experiment
@@ -133,7 +165,8 @@ public class KademliaObserver implements Control {
   public static void reportMsg(Message m, boolean sent) {
     // messages without source are control messages sent by the traffic control
     // we don't want to log them
-    if (m.src == null) return;
+    if (m.src == null)
+      return;
 
     assert (!messages.keySet().contains(String.valueOf(m.id)));
     messages.put(String.valueOf(m.id), m.toMap(sent));
