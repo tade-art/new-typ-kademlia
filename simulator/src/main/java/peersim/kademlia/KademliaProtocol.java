@@ -459,7 +459,7 @@ public class KademliaProtocol implements EDProtocol {
     logger.info("handleFind received from " + m.src.getId() + " " + m.operationId);
     BigInteger[] neighbours;
 
-    // System.out.println("Message toString: " + m.toString());
+    System.out.println("Message toString: " + m.toString());
     // System.out.println("Node is " + this.node.isEvil());
 
     if (m.getType() == Message.MSG_FIND || m.getType() == Message.MSG_GET) {

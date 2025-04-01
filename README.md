@@ -56,13 +56,13 @@ Using 'config/kademlia_putget.cfg' as an example, these fields can be edited to 
 init.1uniqueNodeID peersim.kademlia.CustomDistribution
 init.1uniqueNodeID.protocol 3kademlia
 ```
-- kademlia.* - This is the file used to initalise the distribution of nodes, currently there are only two files to be selected from
+- peersim.kademlia.* - This is the file used to initalise the distribution of nodes, currently there are only two files to be selected from (MaliciousCustomDistribution and CustomDistribution)
 
 ```shell
 #TrafficGenerator class sends and initial 
 control.0traffic peersim.kademlia.TrafficGeneratorPutGet
 ```
-- This parameter initalises the traffic that is generated on the network itself, there are more files to view within the kademlia
+- This parameter initalises the traffic that is generated on the network itself, there are more files to view within the project under the kademlia file
 
 ```shell
 # control.2turbolenceAdd peersim.kademlia.Turbulence

@@ -86,8 +86,8 @@ public class TrafficGenerator implements Control {
     } while ((start == null) || (!start.isUp()));
 
     // send message
-    // EDSimulator.add(0, generateFindNodeMessage(), start, pid);
-    EDSimulator.add(0, generateRegionBasedFindNodeMessage(), start, pid);
+    EDSimulator.add(0, generateFindNodeMessage(), start, pid);
+    // EDSimulator.add(0, generateRegionBasedFindNodeMessage(), start, pid);
     // System.out.println("generated a node");
 
     return false;
